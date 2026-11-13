@@ -1,0 +1,68 @@
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-bg font-sans text-sm text-text antialiased;
+    font-feature-settings: 'tnum' 0;
+  }
+  #root {
+    min-height: 100dvh;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary/50 ring-offset-1 ring-offset-surface;
+  }
+  ::selection {
+    @apply bg-primary/20;
+  }
+}
+
+@layer components {
+  .field {
+    @apply h-10 w-full rounded-control border border-field-border bg-field px-3 text-sm text-text placeholder:text-field-placeholder transition-colors;
+    @apply focus:border-field-focus focus:outline-none focus:ring-2 focus:ring-field-focus/20;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  textarea.field {
+    @apply h-auto py-2;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-semibold text-text-muted;
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--color-border-strong)) transparent;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes scanline {
+  0%,
+  100% {
+    top: 12%;
+  }
+  50% {
+    top: 84%;
+  }
+}
+.animate-scanline {
+  animation: scanline 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

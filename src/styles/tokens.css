@@ -1,0 +1,125 @@
+/*
+ * Mobi design tokens — the single source of truth for branding.
+ * Colors are "R G B" triplets so Tailwind can apply opacity (bg-primary/10).
+ * To rebrand, change the values here; components never hardcode colors.
+ */
+:root {
+  /* Brand */
+  --color-primary: 124 58 237; /* Mobi Purple */
+  --color-primary-hover: 109 40 217;
+  --color-primary-active: 91 33 182;
+  --color-primary-soft: 243 238 255;
+  --color-primary-muted: 221 208 254;
+  --color-primary-fg: 255 255 255;
+
+  --color-secondary: 79 70 229;
+  --color-secondary-soft: 236 238 255;
+  --color-secondary-fg: 255 255 255;
+
+  /* Backgrounds and surfaces */
+  --color-bg: 247 245 254;
+  --color-bg-subtle: 240 236 252;
+  --color-surface: 255 255 255;
+  --color-surface-raised: 255 255 255;
+  --color-surface-muted: 249 247 255;
+
+  /* Text */
+  --color-text: 26 20 51;
+  --color-text-muted: 99 93 125;
+  --color-text-subtle: 150 145 172;
+  --color-text-inverse: 255 255 255;
+
+  /* Borders */
+  --color-border: 234 229 247;
+  --color-border-strong: 213 205 236;
+
+  /* States */
+  --color-success: 22 163 74;
+  --color-success-soft: 225 247 233;
+  --color-warning: 217 119 6;
+  --color-warning-soft: 254 243 214;
+  --color-error: 220 38 38;
+  --color-error-soft: 254 230 230;
+  --color-info: 37 99 235;
+  --color-info-soft: 225 236 255;
+
+  /* Buttons */
+  --btn-primary-bg: var(--color-primary);
+  --btn-primary-bg-hover: var(--color-primary-hover);
+  --btn-primary-fg: var(--color-primary-fg);
+  --btn-secondary-bg: var(--color-primary-soft);
+  --btn-secondary-bg-hover: var(--color-primary-muted);
+  --btn-secondary-fg: var(--color-primary-active);
+  --btn-danger-bg: var(--color-error);
+  --btn-danger-fg: 255 255 255;
+
+  /* Inputs */
+  --input-bg: var(--color-surface);
+  --input-border: var(--color-border-strong);
+  --input-focus: var(--color-primary);
+  --input-placeholder: var(--color-text-subtle);
+
+  /* Tables */
+  --table-head-bg: var(--color-surface-muted);
+  --table-head-fg: var(--color-text-muted);
+  --table-row-hover: var(--color-surface-muted);
+  --table-border: var(--color-border);
+
+  --color-overlay: 26 20 51;
+
+  /* Shape, depth, type */
+  --radius-card: 16px;
+  --radius-control: 10px;
+  --shadow-card: 0 1px 2px rgb(76 29 149 / 0.04), 0 8px 24px -12px rgb(76 29 149 / 0.12);
+  --shadow-pop: 0 12px 40px -8px rgb(46 16 101 / 0.25);
+  --shadow-brand: 0 8px 20px -8px rgb(var(--color-primary) / 0.55);
+  --font-sans: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --color-primary: 139 92 246;
+  --color-primary-hover: 167 139 250;
+  --color-primary-active: 196 181 253;
+  --color-primary-soft: 44 33 84;
+  --color-primary-muted: 66 48 128;
+  --color-primary-fg: 255 255 255;
+
+  --color-secondary: 129 140 248;
+  --color-secondary-soft: 36 38 82;
+  --color-secondary-fg: 255 255 255;
+
+  --color-bg: 14 11 26;
+  --color-bg-subtle: 20 16 36;
+  --color-surface: 24 19 43;
+  --color-surface-raised: 31 25 55;
+  --color-surface-muted: 33 27 58;
+
+  --color-text: 240 237 252;
+  --color-text-muted: 172 164 201;
+  --color-text-subtle: 122 114 153;
+  --color-text-inverse: 14 11 26;
+
+  --color-border: 46 38 77;
+  --color-border-strong: 66 56 105;
+
+  --color-success: 74 222 128;
+  --color-success-soft: 20 54 38;
+  --color-warning: 251 191 36;
+  --color-warning-soft: 64 46 14;
+  --color-error: 248 113 113;
+  --color-error-soft: 70 26 32;
+  --color-info: 96 165 250;
+  --color-info-soft: 24 42 80;
+
+  --btn-danger-bg: 220 38 38;
+  --btn-secondary-fg: var(--color-primary-active);
+
+  --color-overlay: 0 0 0;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.5);
+  --shadow-pop: 0 12px 40px -8px rgb(0 0 0 / 0.7);
+
+  color-scheme: dark;
+}
