@@ -92,7 +92,7 @@ The scanner uses the browser `BarcodeDetector` API and the camera (`getUserMedia
 
 The build is fully static, uses relative asset paths and hash routing, so `dist/` can be served from any static host or sub-path without rewrite rules.
 
-**GitHub Pages (included):** `.github/workflows/deploy.yml` lints, builds and deploys on every push to `main`. One-time setup: in the repository, open Settings → Pages and set Source to "GitHub Actions". The site is then published at `https://<owner>.github.io/<repo>/`.
+**GitHub Pages (included):** `.github/workflows/deploy.yml` lints, builds and publishes `dist` to the `gh-pages` branch on every push to `main`. GitHub Pages serves that branch (Settings → Pages → Source: "Deploy from a branch", `gh-pages`, `/ (root)`). Live site: https://awsbedrock-cell.github.io/mobi_public/
 
 **Other hosts (Vercel, Netlify, S3, Nginx):** build command `npm run build`, output directory `dist`.
 

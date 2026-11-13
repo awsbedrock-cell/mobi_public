@@ -39,7 +39,9 @@ Screenshots of the dashboard, e-commerce overview (dark), POS (mobile), platform
 
 - Production build configuration: done (`vite.config.ts`, relative base, hash routing).
 - GitHub Pages workflow: included at `.github/workflows/deploy.yml`.
-- Push to GitHub and live deployment: see the repository's Actions tab and Pages settings for current status.
+- Repository: https://github.com/awsbedrock-cell/mobi_public (public).
+- Production URL: https://awsbedrock-cell.github.io/mobi_public/ — GitHub Pages serving the `gh-pages` branch, which the workflow rebuilds on every push to `main`.
+- Verified against the production URL (Chrome via Playwright): page sweep 19 routes x 4 viewports x light/dark with 0 problems; interaction suite 57/57; gap suite 103/105 (same 2 mobile test-selector failures as locally).
 - Backend/API: none required; the app runs on bundled sample data. `VITE_API_BASE_URL` is reserved for a future API.
 
 ## Gap-analysis pass (reference comparison)
@@ -65,4 +67,3 @@ Results after the pass (production build, Chrome via Playwright):
 - Original interaction suite: 57/57 passed.
 - New gap suite (desktop, tablet, mobile): 103/105 passed. The 2 failures are the mobile Sync Logs filter assertions: the test selector looks for the log ID, which the mobile card layout does not show. The filter itself was confirmed working on mobile by screenshot, not by an automated assertion.
 - BLOCKED / not run: live camera scanning and photo barcode decoding with a real barcode (no camera or sample photo on the test machine), Firefox, Safari, physical devices.
-- Deployment: BLOCKED — no write access to the repository yet.
