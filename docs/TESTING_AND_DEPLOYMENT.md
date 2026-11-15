@@ -68,9 +68,9 @@ Results after the pass (production build, Chrome via Playwright):
 - New gap suite (desktop, tablet, mobile): 103/105 passed. The 2 failures are the mobile Sync Logs filter assertions: the test selector looks for the log ID, which the mobile card layout does not show. The filter itself was confirmed working on mobile by screenshot, not by an automated assertion.
 - BLOCKED / not run: live camera scanning and photo barcode decoding with a real barcode (no camera or sample photo on the test machine), Firefox, Safari, physical devices.
 
-## Multi-brand and dynamic branding (local production build, not yet deployed)
+## Multi-brand and dynamic branding
 
-Run on the local production build in Chrome (emulated viewports). These changes are not pushed or deployed.
+Run on the local production build in Chrome (emulated viewports). After deployment (commit `9e60fa7`), the brand suite (453 of 453) and the page sweep (0 problems) were re-run against https://awsbedrock-cell.github.io/mobi_public/ with the same results.
 
 | Check | Result |
 | --- | --- |
