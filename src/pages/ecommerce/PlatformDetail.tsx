@@ -16,14 +16,13 @@ import { DataTable } from '../../components/ui/DataTable'
 import { PageHeader, StatCard } from '../../components/ui/Misc'
 import { useToast } from '../../components/ui/Toast'
 import { useStore } from '../../context/StoreContext'
-import { platformTrend } from '../../data/mock'
 import type { PlatformOrder } from '../../data/types'
 import { formatCurrency, formatDate, formatNumber } from '../../lib/utils'
 import { orderColumns } from './PlatformOrders'
 
 export default function PlatformDetail() {
   const { id } = useParams()
-  const { platforms, orders, syncPlatform } = useStore()
+  const { platforms, orders, syncPlatform, metrics } = useStore()
   const notify = useToast()
   const platform = platforms.find((item) => item.id === id)
   const [settings, setSettings] = useState(false)
@@ -109,7 +108,7 @@ export default function PlatformDetail() {
         <Card>
           <CardHeader title={`Sales Trend (${platform.name})`} subtitle="Last 7 days" />
           <div className="p-4 sm:p-5">
-            <LineChart data={platformTrend.map((point) => ({ ...point, value: Math.round(point.value * scale) }))} format={(value) => `₹${value >= 1000 ? `${(value / 1000).toFixed(1)}K` : Math.round(value)}`} />
+            <LineChart data={metrics.platformTrend.map((point) => ({ ...point, value: Math.round(point.value * scale) }))} format={(value) => `₹${value >= 1000 ? `${(value / 1000).toFixed(1)}K` : Math.round(value)}`} />
           </div>
         </Card>
         <Card>

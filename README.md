@@ -97,3 +97,15 @@ The build is fully static, uses relative asset paths and hash routing, so `dist/
 **Other hosts (Vercel, Netlify, S3, Nginx):** build command `npm run build`, output directory `dist`.
 
 See [docs/TESTING_AND_DEPLOYMENT.md](docs/TESTING_AND_DEPLOYMENT.md) for the test and deployment report.
+
+## Multi-brand and dynamic branding
+
+One account can hold several brands, each with its own stores, logo, palette, typography and component styling.
+
+- **Brand switcher** (top right) changes the active brand. The whole UI re-themes at once because a brand only overrides the CSS variables in `src/styles/tokens.css`; no component has brand-specific code.
+- **Store switcher** is separate and lists the active brand's stores. Dashboard, reports, inventory, customers, expenses and settings are scoped to `brand:store`.
+- **Brand Management** (`/settings/brands`): add, edit and delete brands, pick an industry preset, edit colours, font pairing, button / navigation / card style, upload a logo, manage stores, preview in the app, then save.
+- **Permissions**: only the `Store Owner` role can manage brands (`src/branding/types.ts`). The role selector in the account menu is a demo stand-in for real authentication.
+- **Persistence**: brands, active brand, active store per brand and role are saved in `localStorage` (`mobi-brands`). Store data is still in-memory sample data and resets on reload.
+
+To add a preset or font pairing, append an entry to `brandPresets` or `fontPairings` in `src/branding/presets.ts`; default brands live in `src/branding/defaults.ts`. Brand fonts are loaded from Google Fonts on demand.

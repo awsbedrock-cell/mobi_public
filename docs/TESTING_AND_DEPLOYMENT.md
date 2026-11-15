@@ -67,3 +67,17 @@ Results after the pass (production build, Chrome via Playwright):
 - Original interaction suite: 57/57 passed.
 - New gap suite (desktop, tablet, mobile): 103/105 passed. The 2 failures are the mobile Sync Logs filter assertions: the test selector looks for the log ID, which the mobile card layout does not show. The filter itself was confirmed working on mobile by screenshot, not by an automated assertion.
 - BLOCKED / not run: live camera scanning and photo barcode decoding with a real barcode (no camera or sample photo on the test machine), Firefox, Safari, physical devices.
+
+## Multi-brand and dynamic branding (local production build, not yet deployed)
+
+Run on the local production build in Chrome (emulated viewports). These changes are not pushed or deployed.
+
+| Check | Result |
+| --- | --- |
+| `npm run build`, `npm run lint` | Pass, no warnings |
+| Brand suite: 3 brands × 19 routes × light/dark × desktop/tablet/mobile, plus token, data, persistence, store switching, preview, create/edit/delete brand and permission checks | 453 of 453 passed |
+| Existing page sweep (19 routes × 4 sizes × light/dark) | 0 problems |
+| Existing interaction suite | 57 of 57 passed |
+| Existing gap suite | 103 of 105 passed (same two mobile Sync Logs test-selector failures as before) |
+
+Not tested: logo upload with a real image file, Firefox, Safari, real devices, offline use (brand fonts come from Google Fonts).

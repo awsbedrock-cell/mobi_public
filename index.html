@@ -10,12 +10,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <script>
-      // Apply the saved theme before first paint to avoid a flash.
+      // Apply the saved theme and brand before first paint to avoid a flash.
       (function () {
         try {
           var pref = localStorage.getItem('mobi-theme') || 'system';
           var dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
           document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+          var css = localStorage.getItem('mobi-brand-css');
+          if (css) {
+            var style = document.createElement('style');
+            style.id = 'brand-tokens';
+            style.textContent = css;
+            document.head.appendChild(style);
+          }
         } catch (e) {
           document.documentElement.dataset.theme = 'light';
         }

@@ -22,13 +22,16 @@ import Products from './pages/Products'
 import ProductsLayout from './pages/ProductsLayout'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import { BrandProvider } from './branding/BrandProvider'
+import BrandManagement from './pages/Brands'
 import { ThemeProvider } from './theme/ThemeProvider'
 
 export default function App() {
   return (
     <ThemeProvider>
-      <StoreProvider>
+      <BrandProvider>
         <ToastProvider>
+      <StoreProvider>
           {/* Hash routing keeps deep links working on static hosts without rewrite rules. */}
           <HashRouter>
             <Routes>
@@ -56,12 +59,14 @@ export default function App() {
                   <Route path="platform/:id" element={<PlatformDetail />} />
                 </Route>
                 <Route path="settings" element={<Settings />} />
+                <Route path="settings/brands" element={<BrandManagement />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
             </Routes>
           </HashRouter>
-        </ToastProvider>
       </StoreProvider>
+        </ToastProvider>
+      </BrandProvider>
     </ThemeProvider>
   )
 }

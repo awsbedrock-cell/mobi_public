@@ -1,22 +1,24 @@
 import { initials } from '../../lib/utils'
-import { Bell, Check, ChevronDown, Menu, PackageX, Search, Settings, ShoppingBag, Store, TriangleAlert, User } from 'lucide-react'
+import { Bell, Check, Menu, ShieldCheck, PackageX, Search, Settings, ShoppingBag, TriangleAlert, User } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useBrand } from '../../branding/BrandProvider'
+import { roles } from '../../branding/types'
 import { stockStatus, useStore } from '../../context/StoreContext'
 import { IconButton } from '../ui/Button'
 import { Dropdown, DropdownItem } from '../ui/Dropdown'
 import { useToast } from '../ui/Toast'
+import { BrandSwitcher, StoreSwitcher } from './BrandSwitcher'
 import { Logo } from './Logo'
 import { ThemeSwitcher } from './ThemeSwitcher'
 
-const stores = [import.meta.env.VITE_STORE_NAME || 'Main Store', 'City Mall Outlet', 'Online Warehouse']
-const user = { name: 'Nishu Singh', role: 'Store Owner' }
+const user = { name: 'Nishu Singh' }
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
   const navigate = useNavigate()
   const notify = useToast()
   const { products, syncLogs } = useStore()
-  const [store, setStore] = useState(stores[0])
+  const { role, setRole } = useBrand()
   const [query, setQuery] = useState('')
   const [read, setRead] = useState(false)
 
@@ -34,7 +36,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       <IconButton label="Open menu" onClick={onMenu} className="lg:hidden">
         <Menu className="h-5 w-5" />
       </IconButton>
-      <Logo className="lg:hidden [&>span:last-child]:max-[380px]:hidden" />
+      <Logo className="lg:hidden [&>span:last-child]:max-sm:hidden" />
 
       <form onSubmit={onSearch} role="search" className="relative ml-2 hidden max-w-md flex-1 md:block lg:ml-0">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-subtle" />
@@ -42,33 +44,8 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       </form>
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-        <Dropdown
-          trigger={({ toggle, open }) => (
-            <button type="button" onClick={toggle} aria-expanded={open} className="hidden h-9 items-center gap-2 rounded-control border border-border bg-surface px-3 text-sm font-semibold transition-colors hover:border-primary sm:inline-flex">
-              <Store className="h-4 w-4 text-primary" />
-              <span className="max-w-[9rem] truncate">{store}</span>
-              <ChevronDown className="h-4 w-4 text-text-subtle" />
-            </button>
-          )}
-        >
-          {(close) =>
-            stores.map((name) => (
-              <DropdownItem
-                key={name}
-                active={name === store}
-                icon={name === store ? <Check className="h-4 w-4" /> : <Store className="h-4 w-4 text-text-subtle" />}
-                onClick={() => {
-                  setStore(name)
-                  notify(`Switched to ${name}`, 'info')
-                  close()
-                }}
-              >
-                {name}
-              </DropdownItem>
-            ))
-          }
-        </Dropdown>
-
+        <StoreSwitcher />
+        <BrandSwitcher />
         <ThemeSwitcher />
 
         <Dropdown
@@ -128,7 +105,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
             <>
               <div className="px-3 py-2">
                 <p className="text-sm font-bold">{user.name}</p>
-                <p className="text-xs text-text-muted">{user.role}</p>
+                <p className="text-xs text-text-muted">{role}</p>
               </div>
               <DropdownItem
                 icon={<User className="h-4 w-4" />}
@@ -148,6 +125,21 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
               >
                 Settings
               </DropdownItem>
+              <p className="mt-1 border-t border-border px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Role (demo)</p>
+              {roles.map((item) => (
+                <DropdownItem
+                  key={item}
+                  active={item === role}
+                  icon={item === role ? <Check className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4 text-text-subtle" />}
+                  onClick={() => {
+                    setRole(item)
+                    notify(`Now signed in as ${item}`, 'info')
+                    close()
+                  }}
+                >
+                  {item}
+                </DropdownItem>
+              ))}
             </>
           )}
         </Dropdown>

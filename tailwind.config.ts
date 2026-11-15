@@ -22,6 +22,8 @@ export default {
           soft: token('color-secondary-soft'),
           fg: token('color-secondary-fg'),
         },
+        accent: { DEFAULT: token('color-accent'), soft: token('color-accent-soft'), fg: token('color-accent-fg') },
+        card: token('card-border'),
         bg: {
           DEFAULT: token('color-bg'),
           subtle: token('color-bg-subtle'),
@@ -71,10 +73,12 @@ export default {
       },
       fontFamily: {
         sans: ['var(--font-sans)'],
+        heading: ['var(--font-heading)'],
       },
       borderRadius: {
         card: 'var(--radius-card)',
         control: 'var(--radius-control)',
+        button: 'var(--radius-button)',
       },
       boxShadow: {
         card: 'var(--shadow-card)',

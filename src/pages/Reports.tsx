@@ -9,10 +9,10 @@ import { PageHeader, StatCard } from '../components/ui/Misc'
 import { Tabs } from '../components/ui/Tabs'
 import { useToast } from '../components/ui/Toast'
 import { useStore } from '../context/StoreContext'
-import { salesByCategory, salesByPeriod } from '../data/mock'
+import type { StoreMetrics } from '../data/seed'
 import { downloadCsv, formatCurrency, formatNumber } from '../lib/utils'
 
-type Period = keyof typeof salesByPeriod
+type Period = keyof StoreMetrics['salesByPeriod']
 const periods: Period[] = ['Daily', 'Weekly', 'Monthly']
 const ranges = ['This Month', 'Last Month', 'Last 90 Days']
 const rangeFactor: Record<string, number> = { 'This Month': 1, 'Last Month': 0.93, 'Last 90 Days': 2.71 }
@@ -26,15 +26,16 @@ const bestSellers = [
 ]
 
 export default function Reports() {
-  const { products, expenses } = useStore()
+  const { products, expenses, metrics } = useStore()
+  const { salesByCategory, salesByPeriod } = metrics
   const notify = useToast()
   const [period, setPeriod] = useState<Period>('Monthly')
   const [range, setRange] = useState(ranges[0])
-  const factor = rangeFactor[range]
+  const factor = rangeFactor[range] * metrics.factor
 
   const sales = Math.round(1302200 * factor)
   const orders = Math.round(1422 * factor)
-  const spent = Math.round(expenses.reduce((sum, expense) => sum + expense.amount, 0) * factor)
+  const spent = Math.round(expenses.reduce((sum, expense) => sum + expense.amount, 0) * rangeFactor[range])
   const profit = Math.round(sales * 0.118) - Math.round(spent * 0.2)
 
   const exportReport = () => {

@@ -7,7 +7,7 @@ import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
 import { IconTile, StatCard } from '../components/ui/Misc'
 import { stockStatus, useStore } from '../context/StoreContext'
-import { salesToday as trend } from '../data/mock'
+import { useBrand } from '../branding/BrandProvider'
 import { formatCurrency, formatNumber } from '../lib/utils'
 
 const quickActions = [
@@ -32,7 +32,8 @@ function greeting() {
 }
 
 export default function Dashboard() {
-  const { products, customers, salesToday, expenses } = useStore()
+  const { products, customers, salesToday, expenses, metrics } = useStore()
+  const { brand, store } = useBrand()
   const [today] = useState(() => new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }))
   const [hello] = useState(greeting)
   const lowStock = products.filter((product) => stockStatus(product) !== 'In Stock')
@@ -43,7 +44,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">{hello}, Nishu</h1>
-          <p className="mt-1 text-sm text-text-muted">Manage your store faster, smarter and easier.</p>
+          <p className="mt-1 text-sm text-text-muted">{brand.name} · {store.name} — manage your store faster, smarter and easier.</p>
         </div>
         <span className="inline-flex h-9 w-fit items-center gap-2 rounded-control border border-border bg-surface px-3 text-sm font-semibold">
           <CalendarDays className="h-4 w-4 text-primary" />
@@ -55,7 +56,7 @@ export default function Dashboard() {
         <div className="space-y-4 sm:space-y-5">
           <Card className="relative overflow-hidden border-primary/20 bg-primary-soft p-5 sm:p-6">
             <div className="relative z-10 max-w-sm">
-              <span className="inline-block rounded-full bg-warning-soft px-2.5 py-1 text-[11px] font-bold text-warning">Most used</span>
+              <span className="inline-block rounded-full bg-accent px-2.5 py-1 text-[11px] font-bold text-accent-fg">Most used</span>
               <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-primary sm:text-3xl">Make a Sale</h2>
               <p className="mt-1 text-sm text-text-muted">Bill a customer in seconds.</p>
               <Link to="/pos" className="mt-4 inline-block">
@@ -92,7 +93,7 @@ export default function Dashboard() {
           <Card>
             <CardHeader title="Sales Trend" subtitle="Today, by hour" />
             <div className="p-4 sm:p-5">
-              <LineChart data={trend} format={(value) => `₹${Math.round(value / 1000)}K`} />
+              <LineChart data={metrics.trend} format={(value) => `₹${Math.round(value / 1000)}K`} />
             </div>
           </Card>
 

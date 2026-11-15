@@ -1,5 +1,7 @@
 import { Headset, X } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import { useBrand } from '../../branding/BrandProvider'
+import { getNavStyle } from '../../branding/presets'
 import { cn } from '../../lib/utils'
 import { IconButton } from '../ui/Button'
 import { Logo } from './Logo'
@@ -7,6 +9,7 @@ import { navItems } from './nav'
 import { ThemeSegmented } from './ThemeSwitcher'
 
 function NavList({ onNavigate, compact }: { onNavigate?: () => void; compact?: boolean }) {
+  const active = getNavStyle(useBrand().style.nav).active
   return (
     <nav className="flex flex-col gap-1">
       {navItems.map(({ to, label, icon: Icon, end }) => (
@@ -20,7 +23,7 @@ function NavList({ onNavigate, compact }: { onNavigate?: () => void; compact?: b
             cn(
               'flex h-10 items-center gap-3 rounded-control px-3 text-sm font-semibold transition-colors',
               compact && 'lg:max-xl:justify-center lg:max-xl:px-0',
-              isActive ? 'bg-primary text-primary-fg shadow-brand' : 'text-text-muted hover:bg-primary-soft hover:text-primary',
+              isActive ? active : 'text-text-muted hover:bg-primary-soft hover:text-primary',
             )
           }
         >

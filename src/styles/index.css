@@ -12,6 +12,11 @@
     @apply bg-bg font-sans text-sm text-text antialiased;
     font-feature-settings: 'tnum' 0;
   }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading);
+  }
   #root {
     min-height: 100dvh;
   }

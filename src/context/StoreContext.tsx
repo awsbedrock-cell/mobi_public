@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
-import { initialCustomers, initialExpenses, initialOrders, initialPlatforms, initialProducts, initialSyncLogs } from '../data/mock'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useBrand } from '../branding/BrandProvider'
+import { seedStore, type StoreMetrics, type StoreSeed } from '../data/seed'
 import type { CartLine, Customer, Expense, Invoice, Platform, PlatformId, PlatformOrder, Product, StockStatus, SyncLog } from '../data/types'
 
 export function stockStatus(product: Product): StockStatus {
@@ -23,6 +24,8 @@ interface StoreValue {
   syncLogs: SyncLog[]
   cart: CartLine[]
   salesToday: { total: number; orders: number }
+  /** Chart series and sales volume for the active store. */
+  metrics: StoreMetrics
   saveProduct: (product: Product) => void
   deleteProduct: (id: string) => void
   adjustStock: (id: string, delta: number) => void
@@ -41,20 +44,43 @@ interface StoreValue {
 
 const StoreContext = createContext<StoreValue | null>(null)
 
+type Snapshot = Omit<StoreSeed, 'metrics'> & { cart: CartLine[] }
+
 /**
- * In-memory demo store. Swap the initial data and mutators for API calls
- * (see VITE_API_BASE_URL) without touching the pages that consume it.
+ * In-memory demo store, scoped to the active brand and store. Each scope keeps
+ * its own data for the session, so switching away and back loses nothing.
+ * Swap the seed and mutators for API calls (see VITE_API_BASE_URL) without
+ * touching the pages that consume it.
  */
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] = useState(initialProducts)
-  const [customers, setCustomers] = useState(initialCustomers)
-  const [expenses, setExpenses] = useState(initialExpenses)
-  const [platforms, setPlatforms] = useState(initialPlatforms)
-  const [orders] = useState(initialOrders)
-  const [syncLogs, setSyncLogs] = useState(initialSyncLogs)
-  const [cart, setCart] = useState<CartLine[]>([])
-  const [salesToday, setSalesToday] = useState({ total: 89090, orders: 46 })
-  const [invoiceSeq, setInvoiceSeq] = useState(1057)
+  const { scope, store } = useBrand()
+  const [cache] = useState(() => new Map<string, Snapshot>())
+  return (
+    <ScopedStore key={scope} scope={scope} seed={() => seedStore(scope, store.type)} cache={cache}>
+      {children}
+    </ScopedStore>
+  )
+}
+
+function ScopedStore({ scope, seed, cache, children }: { scope: string; seed: () => StoreSeed; cache: Map<string, Snapshot>; children: ReactNode }) {
+  const [initial] = useState(() => {
+    const seeded = seed()
+    return { ...seeded, cart: [] as CartLine[], ...cache.get(scope) }
+  })
+  const metrics = initial.metrics
+  const [products, setProducts] = useState(initial.products)
+  const [customers, setCustomers] = useState(initial.customers)
+  const [expenses, setExpenses] = useState(initial.expenses)
+  const [platforms, setPlatforms] = useState(initial.platforms)
+  const [orders] = useState(initial.orders)
+  const [syncLogs, setSyncLogs] = useState(initial.syncLogs)
+  const [cart, setCart] = useState<CartLine[]>(initial.cart)
+  const [salesToday, setSalesToday] = useState(initial.salesToday)
+  const [invoiceSeq, setInvoiceSeq] = useState(initial.invoiceSeq)
+
+  useEffect(() => {
+    cache.set(scope, { products, customers, expenses, platforms, orders, syncLogs, cart, salesToday, invoiceSeq })
+  }, [cache, scope, products, customers, expenses, platforms, orders, syncLogs, cart, salesToday, invoiceSeq])
 
   const saveProduct = useCallback((product: Product) => {
     setProducts((list) => (list.some((item) => item.id === product.id) ? list.map((item) => (item.id === product.id ? product : item)) : [product, ...list]))
@@ -130,8 +156,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const value = useMemo<StoreValue>(
-    () => ({ products, customers, expenses, platforms, orders, syncLogs, cart, salesToday, saveProduct, deleteProduct, adjustStock, addCustomer, updateCustomer, addExpense, deleteExpense, togglePlatform, updatePlatform, syncPlatform, addToCart, setCartQty, clearCart, completeSale }),
-    [products, customers, expenses, platforms, orders, syncLogs, cart, salesToday, saveProduct, deleteProduct, adjustStock, addCustomer, updateCustomer, addExpense, deleteExpense, togglePlatform, updatePlatform, syncPlatform, addToCart, setCartQty, clearCart, completeSale],
+    () => ({ products, customers, expenses, platforms, orders, syncLogs, cart, salesToday, metrics, saveProduct, deleteProduct, adjustStock, addCustomer, updateCustomer, addExpense, deleteExpense, togglePlatform, updatePlatform, syncPlatform, addToCart, setCartQty, clearCart, completeSale }),
+    [products, customers, expenses, platforms, orders, syncLogs, cart, salesToday, metrics, saveProduct, deleteProduct, adjustStock, addCustomer, updateCustomer, addExpense, deleteExpense, togglePlatform, updatePlatform, syncPlatform, addToCart, setCartQty, clearCart, completeSale],
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

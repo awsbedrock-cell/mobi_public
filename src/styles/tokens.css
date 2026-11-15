@@ -1,7 +1,9 @@
 /*
  * Mobi design tokens — the single source of truth for branding.
  * Colors are "R G B" triplets so Tailwind can apply opacity (bg-primary/10).
- * To rebrand, change the values here; components never hardcode colors.
+ * These are the defaults (the Mobi Signature brand). Other brands override the
+ * same variables at runtime from src/branding/presets.ts; components never
+ * hardcode colors.
  */
 :root {
   /* Brand */
@@ -15,6 +17,11 @@
   --color-secondary: 79 70 229;
   --color-secondary-soft: 236 238 255;
   --color-secondary-fg: 255 255 255;
+
+  /* Accent: highlights, promos and emphasis chips */
+  --color-accent: 245 158 11;
+  --color-accent-soft: 254 243 214;
+  --color-accent-fg: 26 20 51;
 
   /* Backgrounds and surfaces */
   --color-bg: 247 245 254;
@@ -70,9 +77,12 @@
   /* Shape, depth, type */
   --radius-card: 16px;
   --radius-control: 10px;
+  --radius-button: 10px;
+  --card-border: var(--color-border);
   --shadow-card: 0 1px 2px rgb(76 29 149 / 0.04), 0 8px 24px -12px rgb(76 29 149 / 0.12);
   --shadow-pop: 0 12px 40px -8px rgb(46 16 101 / 0.25);
   --shadow-brand: 0 8px 20px -8px rgb(var(--color-primary) / 0.55);
+  --font-heading: var(--font-sans);
   --font-sans: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   color-scheme: light;
@@ -89,6 +99,10 @@
   --color-secondary: 129 140 248;
   --color-secondary-soft: 36 38 82;
   --color-secondary-fg: 255 255 255;
+
+  --color-accent: 251 191 36;
+  --color-accent-soft: 64 46 14;
+  --color-accent-fg: 26 20 51;
 
   --color-bg: 14 11 26;
   --color-bg-subtle: 20 16 36;

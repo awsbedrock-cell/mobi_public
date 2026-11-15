@@ -31,7 +31,7 @@ export function Button({ variant = 'primary', size = 'md', icon, iconRight, bloc
     <button
       type={type}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-control font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-button font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50',
         variants[variant],
         sizes[size],
         block && 'w-full',
