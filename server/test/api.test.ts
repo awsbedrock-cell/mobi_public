@@ -236,10 +236,126 @@ test('flipkart: connect and order import with paging', async () => {
   assert.deepEqual(orders.map((item: any) => [item.id, item.amount, item.status]).sort(), [['OD1', 70000, 'Processing'], ['OD2', 900, 'Processing']])
 })
 
+test('amazon: catalogue import links by SKU, adds the rest, then price and stock are sent', async () => {
+  const scope = '/api/scopes/mobi:web'
+  await api(`${scope}/init`, 'POST', { ...seed, products: [{ id: 'P1', name: 'Galaxy S24', sku: 'sam-s24', price: 79999, stock: 6, reserved: 1, platforms: [] }] })
+  const patches: Record<string, any>[] = []
+  remote = (url, init) => {
+    if (url === 'https://api.amazon.com/auth/o2/token') return json({ access_token: 'Atza|token' })
+    if (url.includes('/sellers/v1/marketplaceParticipations')) return json({ payload: [] })
+    const { pathname, searchParams } = new URL(url)
+    if (init?.method === 'PATCH') {
+      const sku = decodeURIComponent(pathname.split('/').pop()!)
+      patches.push({ sku, ...JSON.parse(String(init.body)) })
+      return sku === 'FBA-1' ? json({ sku, status: 'INVALID', issues: [{ severity: 'ERROR', message: 'Price is below the minimum.' }] }) : json({ sku, status: 'ACCEPTED', issues: [] })
+    }
+    if (pathname === '/listings/2021-08-01/items/A1SELLER') {
+      assert.equal(searchParams.get('marketplaceIds'), 'A21TJRUUN4KGV')
+      assert.equal(searchParams.get('includedData'), 'summaries,offers,fulfillmentAvailability')
+      if (searchParams.get('pageToken') === 'next') return json({ items: [{ sku: 'FBA-1', summaries: [{ marketplaceId: 'A21TJRUUN4KGV', asin: 'B0FBA', itemName: 'Buds Pro', productType: 'HEADPHONES' }], offers: [{ marketplaceId: 'A21TJRUUN4KGV', offerType: 'B2C', price: { currencyCode: 'INR', amount: '4999.00' } }], fulfillmentAvailability: [{ fulfillmentChannelCode: 'AMAZON_IN', quantity: 40 }] }] })
+      return json({ pagination: { nextToken: 'next' }, items: [{ sku: 'SAM-S24', summaries: [{ marketplaceId: 'A21TJRUUN4KGV', asin: 'B0S24', itemName: 'Samsung Galaxy S24 5G', productType: 'CELLULAR_PHONE' }], offers: [{ marketplaceId: 'A21TJRUUN4KGV', offerType: 'B2C', price: { currencyCode: 'INR', amount: '81000.00' } }], fulfillmentAvailability: [{ fulfillmentChannelCode: 'DEFAULT', quantity: 3 }] }] })
+    }
+    return json({}, 404)
+  }
+  assert.equal((await api(`${scope}/platforms/amazon/catalogue`, 'POST', {})).status, 409)
+  assert.equal((await api(`${scope}/platforms/amazon/connect`, 'POST', { credentials: amazonCredentials })).status, 200)
+  assert.equal((await api(`${scope}/platforms/amazon/push`, 'POST', {})).status, 409)
+
+  const imported = await api(`${scope}/platforms/amazon/catalogue`, 'POST', {})
+  assert.equal(imported.status, 200)
+  const [added, linked] = imported.body.products
+  assert.deepEqual([linked.id, linked.name, linked.price, linked.stock, linked.platforms], ['P1', 'Galaxy S24', 79999, 6, ['amazon']])
+  assert.deepEqual([linked.links.amazon.asin, linked.links.amazon.price, linked.links.amazon.stock], ['B0S24', 81000, 3])
+  assert.deepEqual([added.name, added.sku, added.price, added.stock, added.platforms], ['Buds Pro', 'FBA-1', 4999, 0, ['amazon']])
+  assert.match(imported.body.syncLogs[0].message, /2 listings read: 1 added as new products, 1 linked/)
+  assert.equal(imported.body.syncLogs[0].event, 'Catalogue Import')
+  assert.equal((await api(`${scope}/platforms/amazon/catalogue`, 'POST', {})).body.products.length, 2)
+
+  const pushed = await api(`${scope}/platforms/amazon/push`, 'POST', {})
+  assert.equal(pushed.status, 502)
+  assert.match(pushed.body.error, /1 of 2 updated. FBA-1: Price is below the minimum/)
+  assert.equal(pushed.body.syncLogs[0].status, 'Failed')
+  const own = patches.find((patch) => patch.sku === 'SAM-S24')!
+  assert.equal(own.productType, 'CELLULAR_PHONE')
+  assert.deepEqual(own.patches.map((patch: any) => patch.path), ['/attributes/purchasable_offer', '/attributes/fulfillment_availability'])
+  assert.equal(own.patches[0].value[0].our_price[0].schedule[0].value_with_tax, 79999)
+  assert.deepEqual(own.patches[1].value, [{ fulfillment_channel_code: 'DEFAULT', quantity: 5 }])
+  // Stock held by Amazon is never overwritten.
+  assert.deepEqual(patches.find((patch) => patch.sku === 'FBA-1')!.patches.map((patch: any) => patch.path), ['/attributes/purchasable_offer'])
+  const after = pushed.body.products.find((item: any) => item.id === 'P1').links.amazon
+  assert.deepEqual([after.price, after.stock, Boolean(after.pushedAt)], [79999, 5, true])
+  assert.equal(pushed.body.products.find((item: any) => item.sku === 'FBA-1').links.amazon.pushedAt, undefined)
+
+  patches.length = 0
+  const one = await api(`${scope}/platforms/amazon/push`, 'POST', { productIds: ['P1'] })
+  assert.deepEqual([one.status, patches.length, one.body.syncLogs[0].status, one.body.syncLogs[0].sku], [200, 1, 'Success', 'sam-s24'])
+
+  const cashier = (await api('/api/users', 'POST', { name: 'Cat', email: 'cat@mobi.test', password: 'cashier-pass-9', role: 'Cashier' })).body
+  const session = (await api('/api/auth/login', 'POST', { email: 'cat@mobi.test', password: 'cashier-pass-9' }, { authorization: '' })).body.token
+  assert.equal((await api(`${scope}/platforms/amazon/catalogue`, 'POST', {}, as(session))).status, 403)
+  assert.equal((await api(`${scope}/platforms/amazon/push`, 'POST', {}, as(session))).status, 403)
+  await api(`/api/users/${cashier.id ?? cashier.user?.id}`, 'DELETE')
+})
+
+test('flipkart: catalogue import in batches of ten, then price and stock are sent', async () => {
+  const scope = '/api/scopes/mobi:web'
+  const skus = Array.from({ length: 12 }, (_, index) => `FK-${index + 1}`)
+  const sent: Record<string, any> = {}
+  const detailCalls: string[][] = []
+  remote = (url, init) => {
+    if (url.includes('/oauth-service/oauth/token')) return json({ access_token: 'fk-token' })
+    assert.equal(headersOf(init).authorization, 'Bearer fk-token')
+    const body = init?.body ? JSON.parse(String(init.body)) : {}
+    if (url.endsWith('/sellers/v3/shipments/filter/')) return json({ hasMore: false, shipments: [] })
+    if (url.endsWith('/sellers/listings/v3/search')) {
+      const first = !body.page_id
+      return json({ has_more: first, next_page_id: first ? 'p2' : null, listings: (first ? skus.slice(0, 8) : skus.slice(8)).map((sku) => ({ sku_id: sku, product_id: `PID-${sku}`, listing_id: `LST-${sku}` })) })
+    }
+    if (url.endsWith('/sellers/listings/v3/details')) {
+      detailCalls.push(body.sku_ids)
+      return json({ available: Object.fromEntries(body.sku_ids.map((sku: string) => [sku, { product_id: `PID-${sku}`, product_title: `Phone ${sku}`, price: { mrp: 20000, selling_price: 15000 }, locations: sku === 'FK-2' ? [] : [{ id: 'LOC1', status: 'ENABLED', inventory: 7 }] }])) })
+    }
+    if (url.endsWith('/sellers/listings/v3/update/price') || url.endsWith('/sellers/listings/v3/update/inventory')) {
+      const kind = url.endsWith('price') ? 'price' : 'inventory'
+      for (const [sku, value] of Object.entries(body)) sent[`${kind}:${sku}`] = value
+      return json(Object.fromEntries(Object.keys(body).map((sku) => [sku, kind === 'inventory' && sku === 'FK-3' ? { status: 'failure', errors: [{ description: 'Location is disabled.' }] } : { status: 'success' }])))
+    }
+    return json({}, 404)
+  }
+  assert.equal((await api(`${scope}/platforms/flipkart/connect`, 'POST', { credentials: { appId: 'app', appSecret: 'secret' } })).status, 200)
+  const imported = await api(`${scope}/platforms/flipkart/catalogue`, 'POST', {})
+  assert.equal(imported.status, 200)
+  assert.deepEqual(detailCalls.map((batch) => batch.length), [10, 2])
+  const listed = imported.body.products.filter((item: any) => item.platforms.includes('flipkart'))
+  assert.equal(listed.length, 12)
+  const first = listed.find((item: any) => item.sku === 'FK-1')
+  assert.deepEqual([first.name, first.price, first.stock, first.links.flipkart.productId, first.links.flipkart.locationId], ['Phone FK-1', 15000, 7, 'PID-FK-1', 'LOC1'])
+
+  await api(`${scope}/changes`, 'POST', { upserts: { products: [{ ...first, price: 14500, stock: 4 }] } })
+  const pushed = await api(`${scope}/platforms/flipkart/push`, 'POST', {})
+  assert.equal(pushed.status, 502)
+  assert.match(pushed.body.error, /11 of 12 updated. FK-3: Flipkart stock update failed: Location is disabled/)
+  assert.deepEqual(sent['price:FK-1'], { product_id: 'PID-FK-1', price: { mrp: 20000, selling_price: 14500, currency: 'INR' } })
+  assert.deepEqual(sent['inventory:FK-1'], { product_id: 'PID-FK-1', locations: [{ id: 'LOC1', inventory: 4 }] })
+  // No seller location means Flipkart holds the stock, so only the price is sent.
+  assert.ok(sent['price:FK-2'] && !sent['inventory:FK-2'])
+})
+
+test('a failed catalogue import changes nothing and is logged', async () => {
+  const scope = '/api/scopes/mobi:web'
+  const before = (await api(scope)).body.products
+  remote = (url) => (url.includes('/oauth-service/oauth/token') ? json({ access_token: 'fk-token' }) : json({ errors: [{ description: 'Seller is on hold.' }] }, 403))
+  const result = await api(`${scope}/platforms/flipkart/catalogue`, 'POST', {})
+  assert.equal(result.status, 502)
+  assert.match(result.body.error, /Seller is on hold/)
+  assert.equal(result.body.syncLogs[0].status, 'Failed')
+  assert.deepEqual(result.body.products, before)
+})
+
 test('disconnect removes the stored credentials', async () => {
   const result = await api('/api/scopes/mobi:main/platforms/amazon/disconnect', 'POST', {}, admin)
   assert.equal(result.body.platforms.find((item: any) => item.id === 'amazon').connected, false)
-  const [row] = await db.query<{ credentials: string | null }>("select credentials from connections where platform = 'amazon'")
+  const [row] = await db.query<{ credentials: string | null }>("select credentials from connections where platform = 'amazon' and scope = 'mobi:main'")
   assert.equal(row.credentials, null)
   assert.equal((await api('/api/scopes/mobi:main/platforms/amazon/sync', 'POST', {}, admin)).status, 409)
 })

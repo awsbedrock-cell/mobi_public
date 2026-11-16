@@ -42,6 +42,10 @@ interface StoreValue {
   togglePlatform: (id: PlatformId) => void
   updatePlatform: (id: PlatformId, changes: Partial<Platform>) => void
   syncPlatform: (id: PlatformId) => void
+  /** Live mode: reads the seller's own listings from a connected marketplace into Products. */
+  importCatalogue: (id: PlatformId) => void
+  /** Live mode: sends Mobi's price and stock to a connected marketplace for the products linked to it. */
+  pushListings: (id: PlatformId) => void
   addToCart: (productId: string) => void
   setCartQty: (productId: string, qty: number) => void
   clearCart: () => void
@@ -194,7 +198,8 @@ function ScopedStore({ scope, seed, cache, remotePath, children }: { scope: stri
             const own = orders.filter((order) => order.platform === platform.id)
             return {
               ...platform,
-              listed: products.filter((product) => product.platforms.includes(platform.id)).length,
+              // Only products matched to a real listing by a catalogue import count as listed.
+              listed: products.filter((product) => product.platforms.includes(platform.id) && product.links?.[platform.id]).length,
               orders: own.length,
               sales: own.reduce((sum, order) => sum + (order.status === 'Cancelled' ? 0 : order.amount), 0),
               health: platform.connected && !platform.link?.lastError ? 100 : 0,
@@ -223,6 +228,11 @@ function ScopedStore({ scope, seed, cache, remotePath, children }: { scope: stri
   const applyRemote = useCallback(
     (state: RemoteState) => {
       setPlatforms((list) => withLinks(list, state.platforms))
+      if (state.products) {
+        // These came from the server, so they must not be sent back as changes.
+        saved.current = { ...saved.current, products: state.products }
+        setProducts(state.products)
+      }
       if (state.orders) setOrders(state.orders)
       if (state.syncLogs) setSyncLogs(state.syncLogs)
     },
@@ -231,8 +241,9 @@ function ScopedStore({ scope, seed, cache, remotePath, children }: { scope: stri
 
   /** Runs a marketplace action on the server. Returns an error message, or null. */
   const platformAction = useCallback(
-    async (id: PlatformId, action: 'connect' | 'disconnect' | 'sync', body: unknown = {}) => {
+    async (id: PlatformId, action: 'connect' | 'disconnect' | 'sync' | 'catalogue' | 'push', body: unknown = {}) => {
       try {
+        await queue.current // the server must have every local change before it reads or rewrites products
         applyRemote(await api<RemoteState>(`${remotePath}/platforms/${id}/${action}`, { body }))
         return null
       } catch (error) {
@@ -294,6 +305,19 @@ function ScopedStore({ scope, seed, cache, remotePath, children }: { scope: stri
     ])
   }, [live, platformList, platformAction, notify])
 
+  const marketplaceJob = useCallback(
+    (id: PlatformId, action: 'catalogue' | 'push', started: string, done: string) => {
+      const platform = platformList.find((item) => item.id === id)
+      if (!live || !platform) return
+      if (!platform.connected) return notify(`${platform.name} is not connected.`, 'error')
+      notify(`${started} ${platform.name}…`, 'info')
+      void platformAction(id, action).then((error) => notify(error ?? `${platform.name}: ${done}`, error ? 'error' : 'success'))
+    },
+    [live, platformList, platformAction, notify],
+  )
+  const importCatalogue = useCallback((id: PlatformId) => marketplaceJob(id, 'catalogue', 'Importing catalogue from', 'catalogue imported'), [marketplaceJob])
+  const pushListings = useCallback((id: PlatformId) => marketplaceJob(id, 'push', 'Sending price and stock to', 'price and stock updated'), [marketplaceJob])
+
   const addToCart = useCallback((productId: string) => {
     setCart((lines) => (lines.some((line) => line.productId === productId) ? lines.map((line) => (line.productId === productId ? { ...line, qty: line.qty + 1 } : line)) : [...lines, { productId, qty: 1 }]))
   }, [])
@@ -335,8 +359,8 @@ function ScopedStore({ scope, seed, cache, remotePath, children }: { scope: stri
   )
 
   const value = useMemo<StoreValue>(
-    () => ({ live, connectPlatform, products, customers, expenses, platforms, orders, syncLogs, cart, salesToday, metrics, saveProduct, deleteProduct, adjustStock, addCustomer, updateCustomer, addExpense, deleteExpense, togglePlatform, updatePlatform, syncPlatform, addToCart, setCartQty, clearCart, completeSale }),
-    [live, connectPlatform, products, customers, expenses, platforms, orders, syncLogs, cart, salesToday, metrics, saveProduct, deleteProduct, adjustStock, addCustomer, updateCustomer, addExpense, deleteExpense, togglePlatform, updatePlatform, syncPlatform, addToCart, setCartQty, clearCart, completeSale],
+    () => ({ live, connectPlatform, products, customers, expenses, platforms, orders, syncLogs, cart, salesToday, metrics, saveProduct, deleteProduct, adjustStock, addCustomer, updateCustomer, addExpense, deleteExpense, togglePlatform, updatePlatform, syncPlatform, importCatalogue, pushListings, addToCart, setCartQty, clearCart, completeSale }),
+    [live, connectPlatform, products, customers, expenses, platforms, orders, syncLogs, cart, salesToday, metrics, saveProduct, deleteProduct, adjustStock, addCustomer, updateCustomer, addExpense, deleteExpense, togglePlatform, updatePlatform, syncPlatform, importCatalogue, pushListings, addToCart, setCartQty, clearCart, completeSale],
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

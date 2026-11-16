@@ -152,6 +152,15 @@ Credentials are entered under E-commerce → Platform Settings → API, checked 
 - Only the Store Owner can manage brands, marketplaces and accounts. Managers and Cashiers can read and edit shop data.
 - Lost owner password: there is no reset flow yet. Delete the row from the `users` table and run setup again.
 
-Not built yet: catalogue import, pushing listings, price and stock to marketplaces, password reset, per-store permissions.
+### Catalogue import and price/stock updates
+
+On a connected marketplace's page (E-commerce → Amazon or Flipkart) the Store Owner has two more actions:
+
+- **Import Catalogue** reads the seller's own listings (Amazon Listings Items API, Flipkart Listing Management API v3). A listing whose SKU matches a Mobi product (ignoring case) is linked to it and Mobi's price and stock are kept. Any other listing is added as a new product with the marketplace's name, price and stock; its category defaults to Accessories and cost to 0, so review those.
+- **Send Price & Stock** sends Mobi's selling price and available stock (stock minus reserved) for every linked product. It asks for confirmation because it changes live listings. Stock held by the marketplace (Amazon FBA, Flipkart-fulfilled) is never overwritten; only the price is sent for those.
+
+Both are manual; nothing is sent automatically after a sale. Each run is written to Sync Logs, with the marketplace's own error text when it refuses an SKU. Limits per run: 500 listings per marketplace.
+
+Not built yet: creating new marketplace listings from Mobi, automatic/scheduled sync, password reset, per-store permissions.
 
 Tests: `cd server && npm test` (marketplace calls are mocked).

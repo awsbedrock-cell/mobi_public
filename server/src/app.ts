@@ -332,6 +332,122 @@ export function createApp({ db, vault, adminKey, sessions = createSessions(), co
     res.status(error ? 502 : 200).json({ ...(await scopeState(scope)), error: error?.message })
   })
 
+  /** Loads the saved credentials of a connected marketplace, or refuses. */
+  const connectionOf = async (scope: string, marketplace: Marketplace) => {
+    const [row] = await db.query<{ credentials: string | null; connected: boolean }>('select credentials, connected from connections where scope = $1 and platform = $2', [scope, marketplace.id])
+    if (!row?.connected || !row.credentials) throw new HttpError(409, `${marketplace.name} is not connected`)
+    return vault.open<Credentials>(row.credentials)
+  }
+
+  /** Runs a marketplace job, records the outcome in the sync log and answers with the refreshed store. */
+  const runJob = async (res: Response, scope: string, marketplace: Marketplace, event: string, subject: string, job: (now: Date) => Promise<{ message: string; failed?: boolean }>) => {
+    const now = new Date()
+    const log = (status: 'Success' | 'Failed', message: string): Item => ({ id: `LOG-${now.getTime()}-${marketplace.id}`, platform: marketplace.id, event, sku: subject, time: now.toISOString(), status, message })
+    let error: string | undefined
+    try {
+      const outcome = await job(now)
+      if (outcome.failed) error = outcome.message
+      await upsert(db, scope, 'syncLogs', [log(outcome.failed ? 'Failed' : 'Success', outcome.message)], () => -now.getTime())
+      await db.query('update connections set last_sync = $3, last_error = $4 where scope = $1 and platform = $2', [scope, marketplace.id, now.toISOString(), error ?? null])
+    } catch (cause) {
+      if (!(cause instanceof MarketplaceError)) throw cause
+      error = cause.message
+      await upsert(db, scope, 'syncLogs', [log('Failed', cause.message)], () => -now.getTime())
+      await db.query('update connections set last_error = $3 where scope = $1 and platform = $2', [scope, marketplace.id, cause.message])
+    }
+    res.status(error ? 502 : 200).json({ ...(await scopeState(scope)), error })
+  }
+
+  const skuKey = (value: unknown) => String(value ?? '').trim().toLowerCase()
+  const productsOf = async (scope: string) => (await db.query<{ data: Item }>("select data from records where scope = $1 and kind = 'products' order by rank, id", [scope])).map((row) => row.data)
+
+  /**
+   * Imports the seller's own listings. A listing whose SKU matches a Mobi product is linked to it and Mobi's
+   * price and stock are kept; any other listing becomes a new product with the marketplace's price and stock.
+   */
+  app.post('/api/scopes/:scope/platforms/:platform/catalogue', async (req, res) => {
+    requireAdmin(req, res)
+    const scope = scopeOf(req)
+    const marketplace = marketplaceOf(req)
+    const credentials = await connectionOf(scope, marketplace)
+    if (!marketplace.fetchListings) throw new HttpError(409, `${marketplace.name} catalogue import is not supported`)
+    await runJob(res, scope, marketplace, 'Catalogue Import', 'All listings', async (now) => {
+      const listings = (await marketplace.fetchListings!(credentials, fetcher)).filter((listing) => skuKey(listing.sku))
+      const bySku = new Map((await productsOf(scope)).map((product) => [skuKey(product.sku), product]))
+      const linked: Item[] = []
+      const added: Item[] = []
+      for (const listing of listings) {
+        // The marketplace's own spelling of the SKU is kept: it is what later updates must address.
+        const link = { ...listing.ref, sku: listing.sku, price: listing.price, stock: listing.stock, importedAt: now.toISOString() }
+        const existing = bySku.get(skuKey(listing.sku))
+        if (existing) {
+          const platforms = Array.isArray(existing.platforms) ? (existing.platforms as string[]) : []
+          const updated = { ...existing, platforms: platforms.includes(marketplace.id) ? platforms : [...platforms, marketplace.id], links: { ...(existing.links as object), [marketplace.id]: link } }
+          bySku.set(skuKey(listing.sku), updated)
+          if (!added.includes(existing)) linked.push(updated)
+          else added[added.indexOf(existing)] = updated
+        } else {
+          const product: Item = {
+            id: `MP-${createHash('sha256').update(`${marketplace.id}:${skuKey(listing.sku)}`).digest('hex').slice(0, 12)}`,
+            name: listing.name.slice(0, 200),
+            sku: listing.sku.trim(),
+            barcode: '',
+            category: 'Accessories',
+            brand: '',
+            price: listing.price,
+            cost: 0,
+            stock: listing.stock,
+            reserved: 0,
+            reorderLevel: 0,
+            description: `Imported from ${marketplace.name}.`,
+            platforms: [marketplace.id],
+            links: { [marketplace.id]: link },
+          }
+          bySku.set(skuKey(listing.sku), product)
+          added.push(product)
+        }
+      }
+      await db.tx(async (tx) => {
+        // Linked products keep their place in the list; new ones go to the top.
+        for (const product of linked) await tx.query("update records set data = $3 where scope = $1 and kind = 'products' and id = $2", [scope, product.id, JSON.stringify(product)])
+        await upsert(tx, scope, 'products', added)
+      })
+      return { message: `${listings.length} listing${listings.length === 1 ? '' : 's'} read: ${added.length} added as new products, ${linked.length} linked to existing products by SKU.` }
+    })
+  })
+
+  /** Sends Mobi's current price and stock to the marketplace for products linked by a catalogue import. */
+  app.post('/api/scopes/:scope/platforms/:platform/push', async (req, res) => {
+    requireAdmin(req, res)
+    const scope = scopeOf(req)
+    const marketplace = marketplaceOf(req)
+    const credentials = await connectionOf(scope, marketplace)
+    if (!marketplace.pushListings) throw new HttpError(409, `${marketplace.name} price and stock updates are not supported`)
+    const only = (req.body as { productIds?: unknown } | undefined)?.productIds
+    if (only !== undefined && (!Array.isArray(only) || !only.every((id) => typeof id === 'string'))) throw new HttpError(400, 'productIds must be a list of product ids')
+    const linked = (await productsOf(scope)).filter((product) => (product.links as Record<string, unknown> | undefined)?.[marketplace.id] && Array.isArray(product.platforms) && product.platforms.includes(marketplace.id) && (!only || only.includes(product.id)))
+    if (linked.length === 0) throw new HttpError(409, `No products are linked to ${marketplace.name} yet. Import the catalogue first.`)
+    await runJob(res, scope, marketplace, 'Price & Stock Update', linked.length === 1 ? String(linked[0].sku) : `${linked.length} products`, async (now) => {
+      const updates = linked.map((product) => {
+        const { sku, price: _price, stock: _stock, importedAt: _importedAt, pushedAt: _pushedAt, ...ref } = (product.links as Record<string, Record<string, unknown>>)[marketplace.id]
+        return { sku: String(sku ?? product.sku), price: Number(product.price) || 0, stock: Math.max(0, Math.floor((Number(product.stock) || 0) - (Number(product.reserved) || 0))), ref: ref as Record<string, string> }
+      })
+      const results = await marketplace.pushListings!(credentials, updates, fetcher)
+      const failed = results.filter((result) => result.error)
+      const done = new Set(results.filter((result) => !result.error).map((result) => skuKey(result.sku)))
+      await db.tx(async (tx) => {
+        for (const [index, product] of linked.entries()) {
+          if (!done.has(skuKey(updates[index].sku))) continue
+          const links = product.links as Record<string, Record<string, unknown>>
+          const updated = { ...product, links: { ...links, [marketplace.id]: { ...links[marketplace.id], price: updates[index].price, stock: updates[index].stock, pushedAt: now.toISOString() } } }
+          await tx.query("update records set data = $3 where scope = $1 and kind = 'products' and id = $2", [scope, product.id, JSON.stringify(updated)])
+        }
+      })
+      if (failed.length === 0) return { message: `Price and stock sent for ${done.size} product${done.size === 1 ? '' : 's'}.` }
+      return { failed: true, message: `${done.size} of ${results.length} updated. ${failed.slice(0, 3).map((result) => `${result.sku}: ${result.error}`).join(' | ')}${failed.length > 3 ? ` | and ${failed.length - 3} more` : ''}` }
+    })
+  })
+
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found')))
 
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {

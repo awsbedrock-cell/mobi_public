@@ -96,3 +96,10 @@ Not tested: logo upload with a real image file, Firefox, Safari, real devices, o
 - Server tests: 17 of 17 passed, including: no data without a session, forged tokens rejected, setup needs `ADMIN_KEY` and works once, passwords stored hashed, Owner-only routes refuse a Cashier, removed accounts lose access, login lockout after 8 wrong passwords.
 - Browser test on a local live build (Chrome, desktop): 13 of 13 passed — owner setup, wrong admin key, account menu, adding a cashier, POS sale saved, reload keeps the session, sign out, wrong password, cashier restrictions, invalid session returns to login.
 - The marketplace form no longer asks for the admin key; the Store Owner's session is used instead.
+
+## Catalogue import and price/stock updates (live mode)
+
+- Server tests: 20 of 20 passed. New ones use stand-in marketplace responses shaped like the official API documentation: Amazon listing paging, SKU linking, new products, PATCH payloads, FBA stock left alone, partial failure reporting; Flipkart search paging, details in batches of ten, price and inventory payloads; failed import changes nothing; Cashier gets 403.
+- Local browser test (Chrome, desktop plus one mobile-width check) against the real Mobi API with Amazon's servers replaced by a local stand-in: 10 of 10 passed (connect, import, new product visible in Products, existing product linked with Mobi price kept, send price and stock, Sync Logs entries).
+- Not tested: any of this against a real Amazon or Flipkart seller account (no credentials). The request and response shapes follow the published documentation but have not been confirmed by a real marketplace response.
+

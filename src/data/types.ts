@@ -18,6 +18,8 @@ export interface Product {
   platforms: PlatformId[]
   /** Data URL of the product photo, if one was added. */
   image?: string
+  /** Live mode: the marketplace listings this product was matched to by a catalogue import, with the price and stock last seen or sent there. */
+  links?: Partial<Record<PlatformId, { price: number; stock: number; importedAt: string; pushedAt?: string }>>
 }
 
 export type StockStatus = 'In Stock' | 'Low Stock' | 'Out of Stock'

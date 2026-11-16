@@ -1,4 +1,4 @@
-import { ExternalLink, HeartPulse, IndianRupee, ListChecks, RefreshCcw, Settings, ShoppingBag } from 'lucide-react'
+import { Download, ExternalLink, HeartPulse, IndianRupee, ListChecks, RefreshCcw, Settings, ShoppingBag, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { Tabs } from '../../components/ui/Tabs'
 import { ProductListings } from './PlatformProducts'
@@ -15,6 +15,7 @@ import { Card, CardHeader } from '../../components/ui/Card'
 import { DataTable } from '../../components/ui/DataTable'
 import { PageHeader, StatCard } from '../../components/ui/Misc'
 import { useToast } from '../../components/ui/Toast'
+import { useBrand } from '../../branding/BrandProvider'
 import { useStore } from '../../context/StoreContext'
 import type { PlatformOrder } from '../../data/types'
 import { formatCurrency, formatDate, formatNumber } from '../../lib/utils'
@@ -22,7 +23,8 @@ import { orderColumns } from './PlatformOrders'
 
 export default function PlatformDetail() {
   const { id } = useParams()
-  const { platforms, orders, syncPlatform, metrics, live } = useStore()
+  const { platforms, orders, syncPlatform, importCatalogue, pushListings, metrics, live } = useStore()
+  const { role } = useBrand()
   const notify = useToast()
   const platform = platforms.find((item) => item.id === id)
   const [settings, setSettings] = useState(false)
@@ -58,7 +60,7 @@ export default function PlatformDetail() {
               <h2 className="text-lg font-extrabold">{platform.name}</h2>
               <Badge tone={platform.connected ? 'success' : 'neutral'}>{platform.connected ? 'Connected' : 'Disconnected'}</Badge>
             </div>
-            <p className="text-xs text-text-muted">Last sync: {formatDate(platform.lastSync, true)}</p>
+            <p className="text-xs text-text-muted">Last sync: {platform.lastSync ? formatDate(platform.lastSync, true) : 'Never'}</p>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -70,8 +72,24 @@ export default function PlatformDetail() {
               if (!live) notify(`${platform.name} synced`)
             }}
           >
-            Sync Now
+            {live ? 'Import Orders' : 'Sync Now'}
           </Button>
+          {live && platform.connected && role === 'Store Owner' && (
+            <>
+              <Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={() => importCatalogue(platform.id)}>
+                Import Catalogue
+              </Button>
+              <Button
+                variant="secondary"
+                icon={<Upload className="h-4 w-4" />}
+                onClick={() => {
+                  if (window.confirm(`Send Mobi's current price and stock to ${platform.name} for every product linked to it? This changes your live ${platform.name} listings.`)) pushListings(platform.id)
+                }}
+              >
+                Send Price & Stock
+              </Button>
+            </>
+          )}
           <Button variant="outline" icon={<ExternalLink className="h-4 w-4" />} onClick={() => window.open(platform.portalUrl, '_blank', 'noopener')}>
             View on {platform.name}
           </Button>

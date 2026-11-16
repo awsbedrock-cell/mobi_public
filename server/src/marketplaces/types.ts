@@ -22,6 +22,28 @@ export interface MarketplaceOrder {
   lines: { productId: string; name: string; sku: string; qty: number; price: number }[]
 }
 
+/** One of the seller's own listings on a marketplace. `ref` holds the identifiers needed to update it later. */
+export interface MarketplaceListing {
+  sku: string
+  name: string
+  price: number
+  stock: number
+  ref: Record<string, string>
+}
+
+export interface ListingUpdate {
+  sku: string
+  price: number
+  stock: number
+  ref: Record<string, string>
+}
+
+/** Outcome for one SKU; `error` is the marketplace's own message when it refused the update. */
+export interface PushResult {
+  sku: string
+  error?: string
+}
+
 export type Credentials = Record<string, string>
 export type Fetch = typeof fetch
 
@@ -36,6 +58,10 @@ export interface Marketplace {
   /** Throws MarketplaceError when the credentials are rejected. Returns the seller identifier to display. */
   verify?(credentials: Credentials, fetcher?: Fetch): Promise<string>
   fetchOrders?(credentials: Credentials, since: Date, fetcher?: Fetch): Promise<MarketplaceOrder[]>
+  /** The seller's own listings, read through the seller API. */
+  fetchListings?(credentials: Credentials, fetcher?: Fetch): Promise<MarketplaceListing[]>
+  /** Sends Mobi's price and stock for listings that were imported earlier. */
+  pushListings?(credentials: Credentials, updates: ListingUpdate[], fetcher?: Fetch): Promise<PushResult[]>
 }
 
 export class MarketplaceError extends Error {}
@@ -49,8 +75,8 @@ export async function readJson(response: Response, what: string) {
     /* non-JSON error page */
   }
   if (!response.ok) {
-    const detail = (body as { errors?: { message?: string }[]; error_description?: string; message?: string } | null) ?? {}
-    throw new MarketplaceError(`${what} failed (HTTP ${response.status}): ${detail.errors?.[0]?.message ?? detail.error_description ?? detail.message ?? (text.slice(0, 160) || 'no details')}`)
+    const detail = (body as { errors?: { message?: string; description?: string }[]; error_description?: string; message?: string } | null) ?? {}
+    throw new MarketplaceError(`${what} failed (HTTP ${response.status}): ${detail.errors?.[0]?.message ?? detail.errors?.[0]?.description ?? detail.error_description ?? detail.message ?? (text.slice(0, 160) || 'no details')}`)
   }
   return body as Record<string, any>
 }
