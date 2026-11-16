@@ -27,7 +27,7 @@ const columns: Column<SyncLog>[] = [
 ]
 
 export function SyncLogList({ lockedPlatform }: { lockedPlatform?: PlatformId }) {
-  const { syncLogs, platforms, syncPlatform } = useStore()
+  const { syncLogs, platforms, syncPlatform, live } = useStore()
   const notify = useToast()
   const [query, setQuery] = useState('')
   const [platformFilter, setPlatform] = useState('all')
@@ -51,7 +51,7 @@ export function SyncLogList({ lockedPlatform }: { lockedPlatform?: PlatformId })
   const syncAll = () => {
     const connected = platforms.filter((item) => item.connected && (!lockedPlatform || item.id === lockedPlatform))
     connected.forEach((item) => syncPlatform(item.id))
-    notify(connected.length ? `Synced ${connected.length} platform${connected.length > 1 ? 's' : ''}` : 'Connect the platform before syncing', connected.length ? 'success' : 'error')
+    if (!live || connected.length === 0) notify(connected.length ? `Synced ${connected.length} platform${connected.length > 1 ? 's' : ''}` : 'Connect the platform before syncing', connected.length ? 'success' : 'error')
   }
 
   return (

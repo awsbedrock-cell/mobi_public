@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useStore } from '../../context/StoreContext'
 import { categories } from '../../data/mock'
 import type { PlatformId } from '../../data/types'
+import { adminKey } from '../../lib/api'
 import { cn } from '../../lib/utils'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -39,7 +40,7 @@ function ToggleRow({ label, hint, checked, onChange }: { label: string; hint?: s
 }
 
 export function PlatformSettingsModal({ platformId, onClose, initialSection = 'general' }: { platformId: PlatformId; onClose: () => void; initialSection?: SectionId }) {
-  const { platforms, togglePlatform, updatePlatform, syncPlatform } = useStore()
+  const { platforms, togglePlatform, updatePlatform, syncPlatform, live, connectPlatform } = useStore()
   const notify = useToast()
   const platform = platforms.find((item) => item.id === platformId)
   const [section, setSection] = useState<SectionId>(initialSection)
@@ -51,6 +52,9 @@ export function PlatformSettingsModal({ platformId, onClose, initialSection = 'g
   const [apiKey, setApiKey] = useState(platform?.apiKey ?? '')
   const [showKey, setShowKey] = useState(false)
   const [apiError, setApiError] = useState('')
+  const [credentials, setCredentials] = useState<Record<string, string>>({})
+  const [admin, setAdmin] = useState(adminKey.get)
+  const [busy, setBusy] = useState(false)
   if (!platform) return null
 
   const flag = (key: keyof typeof flags) => ({ checked: flags[key], onChange: (value: boolean) => setFlags({ ...flags, [key]: value }) })
@@ -113,6 +117,7 @@ export function PlatformSettingsModal({ platformId, onClose, initialSection = 'g
                     size="sm"
                     variant="secondary"
                     onClick={() => {
+                      if (live) return platform.connected ? syncPlatform(platform.id) : setSection('api')
                       if (!platform.connected) togglePlatform(platform.id)
                       syncPlatform(platform.id)
                       notify(`${platform.name} reconnected`)
@@ -129,7 +134,77 @@ export function PlatformSettingsModal({ platformId, onClose, initialSection = 'g
               </div>
             </div>
           )}
-          {section === 'api' && (
+          {section === 'api' && live && platform.link && !platform.link.available && (
+            <div className="space-y-3">
+              <h3 className="font-bold">API Settings</h3>
+              <p className="text-sm text-text-muted">{platform.link.note}</p>
+              <Button variant="outline" onClick={() => window.open(platform.portalUrl, '_blank', 'noopener')}>
+                Open {platform.name} seller portal
+              </Button>
+            </div>
+          )}
+          {section === 'api' && live && platform.link?.available && (
+            <form
+              className="space-y-4"
+              onSubmit={async (event) => {
+                event.preventDefault()
+                adminKey.set(admin.trim())
+                setBusy(true)
+                const error = await connectPlatform(platform.id, credentials)
+                setBusy(false)
+                setApiError(error ?? '')
+                if (error) return
+                setCredentials({})
+                notify(`${platform.name} connected`)
+              }}
+            >
+              <h3 className="font-bold">API Settings</h3>
+              <p className="text-sm text-text-muted">
+                {platform.link.note}{' '}
+                <a className="font-semibold text-primary underline" href={platform.link.docsUrl} target="_blank" rel="noopener noreferrer">
+                  Setup guide
+                </a>
+              </p>
+              {platform.connected && <p className="text-sm font-medium">Connected as {platform.sellerId}. Enter new credentials to replace the saved ones.</p>}
+              {platform.link.lastError && <p className="text-sm font-medium text-error">Last sync failed: {platform.link.lastError}</p>}
+              {platform.link.fields.map((field) => (
+                <FormField key={field.key} label={field.label}>
+                  <input
+                    className="field"
+                    type={field.secret ? 'password' : 'text'}
+                    value={credentials[field.key] ?? ''}
+                    onChange={(event) => setCredentials({ ...credentials, [field.key]: event.target.value })}
+                    placeholder={field.placeholder}
+                    autoComplete="off"
+                    required
+                  />
+                </FormField>
+              ))}
+              <FormField label="Mobi admin key">
+                <input className="field" type="password" value={admin} onChange={(event) => setAdmin(event.target.value)} placeholder="Set as ADMIN_KEY on the Mobi server" autoComplete="off" required />
+              </FormField>
+              {apiError && <p className="text-sm font-medium text-error">{apiError}</p>}
+              <p className="text-xs text-text-muted">Mobi checks these with {platform.name} before saving. They are stored encrypted on the Mobi server and are never shown again.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={busy}>
+                  {busy ? 'Checking…' : platform.connected ? 'Replace credentials' : `Connect ${platform.name}`}
+                </Button>
+                {platform.connected && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      adminKey.set(admin.trim())
+                      togglePlatform(platform.id)
+                    }}
+                  >
+                    Disconnect
+                  </Button>
+                )}
+              </div>
+            </form>
+          )}
+          {section === 'api' && !live && (
             <form
               className="space-y-4"
               onSubmit={(event) => {
@@ -223,7 +298,7 @@ export function PlatformSettingsModal({ platformId, onClose, initialSection = 'g
                 icon={<RefreshCcw className="h-4 w-4" />}
                 onClick={() => {
                   syncPlatform(platform.id)
-                  notify(`${platform.name} synced`)
+                  if (!live) notify(`${platform.name} synced`)
                 }}
               >
                 Sync Now

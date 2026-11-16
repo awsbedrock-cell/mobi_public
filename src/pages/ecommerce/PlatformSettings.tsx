@@ -40,7 +40,7 @@ const toggleGroups: Record<Exclude<SectionId, 'platforms' | 'sync'>, Array<[stri
 }
 
 export default function PlatformSettings() {
-  const { platforms, togglePlatform, syncPlatform } = useStore()
+  const { platforms, togglePlatform, syncPlatform, live } = useStore()
   const notify = useToast()
   const [section, setSection] = useState<SectionId>('platforms')
   const [settingsFor, setSettingsFor] = useState<{ id: PlatformId; section: 'general' | 'api' } | null>(null)
@@ -86,6 +86,7 @@ export default function PlatformSettings() {
                         size="sm"
                         variant="secondary"
                         onClick={() => {
+                          if (live) return platform.connected ? syncPlatform(platform.id) : setSettingsFor({ id: platform.id, section: 'api' })
                           if (!platform.connected) togglePlatform(platform.id)
                           syncPlatform(platform.id)
                           notify(`${platform.name} reconnected`)

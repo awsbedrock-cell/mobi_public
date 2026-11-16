@@ -58,9 +58,11 @@ export interface Platform {
   marketplace: string
   /** Seller portal opened by "View on …" actions. */
   portalUrl: string
-  /** API credentials entered in Platform Settings. Held in memory only. */
+  /** Demo mode only: credentials typed in Platform Settings, held in memory. */
   sellerId?: string
   apiKey?: string
+  /** Set when the app runs against the Mobi backend. */
+  link?: PlatformLink
   /** Marketplace brand colors are third-party identity, not Mobi theme tokens. */
   brandColor: string
   brandFg: string
@@ -70,6 +72,23 @@ export interface Platform {
   orders: number
   sales: number
   health: number
+}
+
+export interface CredentialField {
+  key: string
+  label: string
+  secret: boolean
+  placeholder?: string
+}
+
+/** Real connection state of a marketplace, as reported by the backend. */
+export interface PlatformLink {
+  /** False when the marketplace has no self-service seller API. */
+  available: boolean
+  note: string
+  docsUrl: string
+  fields: CredentialField[]
+  lastError: string
 }
 
 export type OrderStatus = 'Shipped' | 'Processing' | 'Delivered' | 'Cancelled'

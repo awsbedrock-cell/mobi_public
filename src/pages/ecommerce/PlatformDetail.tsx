@@ -22,7 +22,7 @@ import { orderColumns } from './PlatformOrders'
 
 export default function PlatformDetail() {
   const { id } = useParams()
-  const { platforms, orders, syncPlatform, metrics } = useStore()
+  const { platforms, orders, syncPlatform, metrics, live } = useStore()
   const notify = useToast()
   const platform = platforms.find((item) => item.id === id)
   const [settings, setSettings] = useState(false)
@@ -67,7 +67,7 @@ export default function PlatformDetail() {
             icon={<RefreshCcw className="h-4 w-4" />}
             onClick={() => {
               syncPlatform(platform.id)
-              notify(`${platform.name} synced`)
+              if (!live) notify(`${platform.name} synced`)
             }}
           >
             Sync Now

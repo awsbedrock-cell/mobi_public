@@ -14,7 +14,7 @@ import type { PlatformId } from '../../data/types'
 import { formatCurrency, formatNumber } from '../../lib/utils'
 
 export default function Overview() {
-  const { platforms, togglePlatform } = useStore()
+  const { platforms, togglePlatform, live } = useStore()
   const notify = useToast()
   const [settingsFor, setSettingsFor] = useState<PlatformId | null>(null)
   const connected = platforms.filter((platform) => platform.connected)
@@ -70,7 +70,7 @@ export default function Overview() {
                 checked={platform.connected}
                 onChange={() => {
                   togglePlatform(platform.id)
-                  notify(`${platform.name} ${platform.connected ? 'disconnected' : 'connected'}`, platform.connected ? 'info' : 'success')
+                  if (!live) notify(`${platform.name} ${platform.connected ? 'disconnected' : 'connected'}`, platform.connected ? 'info' : 'success')
                 }}
               />
               <IconButton label={`${platform.name} settings`} onClick={() => setSettingsFor(platform.id)}>

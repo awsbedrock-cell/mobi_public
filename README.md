@@ -109,3 +109,41 @@ One account can hold several brands, each with its own stores, logo, palette, ty
 - **Persistence**: brands, active brand, active store per brand and role are saved in `localStorage` (`mobi-brands`). Store data is still in-memory sample data and resets on reload.
 
 To add a preset or font pairing, append an entry to `brandPresets` or `fontPairings` in `src/branding/presets.ts`; default brands live in `src/branding/defaults.ts`. Brand fonts are loaded from Google Fonts on demand.
+
+## Backend (optional, makes data persistent)
+
+The app runs in two modes:
+
+- **Demo mode** (default, `VITE_API_BASE_URL` empty): sample data in the browser, resets on reload. This is what GitHub Pages serves.
+- **Live mode** (`VITE_API_BASE_URL` set at build time): products, stock, customers, sales, expenses, brands, marketplace orders and sync logs are stored by the API in `server/`, separately for each brand and store.
+
+### Run locally
+
+```
+cd server
+npm install
+cp .env.example .env      # set ADMIN_KEY and CREDENTIALS_KEY
+node --env-file=.env src/index.ts
+```
+
+Then start the frontend with `VITE_API_BASE_URL=http://localhost:4000 npm run dev`. Needs Node 22.18 or newer. With `DATABASE_URL` empty the API uses an embedded PostgreSQL-compatible database in `server/data`; with it set, it uses that PostgreSQL server.
+
+### Deploy on Render
+
+`render.yaml` defines the API (`mobi-api`) and a PostgreSQL database (`mobi-db`): Render → New → Blueprint → pick this repository. Afterwards set `CORS_ORIGINS` on `mobi-api` to the frontend address, and `VITE_API_BASE_URL` on the static site to the API address, then redeploy the static site.
+
+### Marketplaces
+
+Data comes from official seller APIs only; nothing is scraped. Until a marketplace is connected with valid credentials it shows as disconnected with no orders.
+
+| Marketplace | Status |
+| --- | --- |
+| Amazon | SP-API: verifies the seller account and imports orders (last 30 days) |
+| Flipkart | Marketplace Seller API: verifies the application and imports shipments/orders |
+| Myntra, Nykaa, Meesho, Blinkit | Partner-only APIs; no connector until the marketplace grants access |
+
+Credentials are entered under E-commerce → Platform Settings → API, checked against the marketplace, encrypted (AES-256-GCM, `CREDENTIALS_KEY`) and never sent back to the browser. Connecting, disconnecting and syncing require the `ADMIN_KEY`.
+
+Not built yet: catalogue import, pushing listings, price and stock to marketplaces, user login. The admin key is the only access control, and the data endpoints are open to anyone who knows the API address.
+
+Tests: `cd server && npm test` (marketplace calls are mocked).

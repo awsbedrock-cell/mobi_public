@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { api, isLive } from '../lib/api'
 import { hexToRgb, onColor } from './color'
 import { defaultBrands } from './defaults'
 import { buildTokens, getFont, isSignatureStyle, type BrandStyle, type TokenMap } from './presets'
@@ -117,6 +118,33 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       /* storage unavailable or full (large logos) */
     }
   }, [state])
+
+  // Live mode: brands are shared through the backend. The active brand, store and role stay per browser.
+  const synced = useRef<Brand[] | null>(null)
+  useEffect(() => {
+    if (!isLive) return
+    let cancelled = false
+    api<{ brands: Brand[] } | null>('/api/brands').then(
+      (saved) => {
+        if (cancelled) return
+        const brands = saved?.brands?.filter((item) => item && item.id && item.style && Array.isArray(item.stores) && item.stores.length > 0)
+        if (!brands?.length) return void (synced.current = [])
+        synced.current = brands
+        setState((current) => ({ ...current, brands, activeBrandId: brands.some((item) => item.id === current.activeBrandId) ? current.activeBrandId : brands[0].id }))
+      },
+      () => undefined,
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isLive || synced.current === null || synced.current === state.brands) return
+    synced.current = state.brands
+    const timer = window.setTimeout(() => void api('/api/brands', { method: 'PUT', body: { brands: state.brands } }).catch(() => undefined), 400)
+    return () => window.clearTimeout(timer)
+  }, [state.brands])
 
   useEffect(() => {
     loadFont(style.font)
