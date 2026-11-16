@@ -81,3 +81,12 @@ Run on the local production build in Chrome (emulated viewports). After deployme
 | Existing gap suite | 103 of 105 passed (same two mobile Sync Logs test-selector failures as before) |
 
 Not tested: logo upload with a real image file, Firefox, Safari, real devices, offline use (brand fonts come from Google Fonts).
+
+## Backend and live mode (16 Nov 2026)
+
+- Frontend (live mode): https://mobi-hztj.onrender.com — API: https://mobi-api-bkvo.onrender.com (Render free web service + PostgreSQL, from `render.yaml`). GitHub Pages stays in demo mode.
+- Server tests (`cd server && npm test`): 14 of 14 passed; marketplace responses are mocked.
+- Browser test on the Render URLs (Chrome, desktop): 9 of 9 passed — store initialised in the database, POS sale saved (invoice number and stock), data unchanged after reload, all six marketplaces disconnected with no sample orders, wrong admin key rejected, partner-only note for Meesho, no console errors.
+- Local only: Amazon's real token endpoint rejected made-up credentials and the app showed the error.
+- Not tested: a successful Amazon or Flipkart connection and order import against a real seller account (no credentials), data surviving a Render restart, live mode on tablet/mobile sizes.
+- Not built: catalogue import, pushing listings/price/stock to marketplaces, user login (data endpoints are unauthenticated; only marketplace actions need `ADMIN_KEY`).
