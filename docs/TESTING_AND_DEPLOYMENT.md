@@ -90,3 +90,9 @@ Not tested: logo upload with a real image file, Firefox, Safari, real devices, o
 - Local only: Amazon's real token endpoint rejected made-up credentials and the app showed the error.
 - Not tested: a successful Amazon or Flipkart connection and order import against a real seller account (no credentials), data surviving a Render restart, live mode on tablet/mobile sizes.
 - Not built: catalogue import, pushing listings/price/stock to marketplaces, user login (data endpoints are unauthenticated; only marketplace actions need `ADMIN_KEY`).
+
+## Sign-in (live mode)
+
+- Server tests: 17 of 17 passed, including: no data without a session, forged tokens rejected, setup needs `ADMIN_KEY` and works once, passwords stored hashed, Owner-only routes refuse a Cashier, removed accounts lose access, login lockout after 8 wrong passwords.
+- Browser test on a local live build (Chrome, desktop): 13 of 13 passed — owner setup, wrong admin key, account menu, adding a cashier, POS sale saved, reload keeps the session, sign out, wrong password, cashier restrictions, invalid session returns to login.
+- The marketplace form no longer asks for the admin key; the Store Owner's session is used instead.

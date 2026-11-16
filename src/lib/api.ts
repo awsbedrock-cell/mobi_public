@@ -2,20 +2,29 @@
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '')
 export const isLive = API_BASE !== ''
 
-const ADMIN_KEY = 'mobi-admin-key'
+const SESSION_KEY = 'mobi-session'
+/** Fired when the server rejects the saved session, so the app returns to the sign-in screen. */
+export const SIGNED_OUT_EVENT = 'mobi-signed-out'
 
-/** Admin key for marketplace actions. Kept for the browser tab only, never in the build. */
-export const adminKey = {
+/** The signed session token from the server. The password itself is never stored. */
+export const session = {
   get: () => {
     try {
-      return sessionStorage.getItem(ADMIN_KEY) ?? ''
+      return localStorage.getItem(SESSION_KEY) ?? ''
     } catch {
       return ''
     }
   },
   set: (value: string) => {
     try {
-      sessionStorage.setItem(ADMIN_KEY, value)
+      localStorage.setItem(SESSION_KEY, value)
+    } catch {
+      /* storage unavailable */
+    }
+  },
+  clear: () => {
+    try {
+      localStorage.removeItem(SESSION_KEY)
     } catch {
       /* storage unavailable */
     }
@@ -32,12 +41,13 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, options: { method?: string; body?: unknown; admin?: boolean; keepalive?: boolean } = {}): Promise<T> {
+export async function api<T>(path: string, options: { method?: string; body?: unknown; headers?: Record<string, string>; keepalive?: boolean } = {}): Promise<T> {
+  const token = session.get()
   let response: Response
   try {
     response = await fetch(`${API_BASE}${path}`, {
       method: options.method ?? (options.body === undefined ? 'GET' : 'POST'),
-      headers: { ...(options.body === undefined ? {} : { 'content-type': 'application/json' }), ...(options.admin ? { 'x-admin-key': adminKey.get() } : {}) },
+      headers: { ...(options.body === undefined ? {} : { 'content-type': 'application/json' }), ...(token ? { authorization: `Bearer ${token}` } : {}), ...options.headers },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       keepalive: options.keepalive,
     })
@@ -45,6 +55,10 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     throw new ApiError(0, 'Could not reach the Mobi server', null)
   }
   const body = (await response.json().catch(() => null)) as { error?: string } | null
+  if (response.status === 401 && token && token === session.get() && !/^\/api\/auth\/(login|setup)$/.test(path)) {
+    session.clear()
+    window.dispatchEvent(new Event(SIGNED_OUT_EVENT))
+  }
   if (!response.ok) throw new ApiError(response.status, body?.error ?? `Request failed (${response.status})`, body)
   return body as T
 }

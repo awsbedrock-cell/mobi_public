@@ -1,9 +1,11 @@
 import { Bell, Palette, SlidersHorizontal, Store } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../auth/AuthProvider'
 import { useBrand } from '../branding/BrandProvider'
 import { getPreset } from '../branding/presets'
 import { ThemeSegmented } from '../components/layout/ThemeSwitcher'
+import { AccountCard, TeamCard } from '../components/settings/Accounts'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
@@ -30,6 +32,7 @@ const swatches = [
 export default function Settings() {
   const { preference, resolved } = useTheme()
   const notify = useToast()
+  const { user } = useAuth()
   const { brand, store, updateStore } = useBrand()
   const [shop, setShop] = useState({ name: store.name, phone: store.phone, gstin: store.gstin, address: store.address, manager: store.manager, currency: 'INR (₹)' })
   const [alerts, setAlerts] = useState({ lowStock: true, dailySummary: true, syncFailures: true, newOrders: false })
@@ -152,6 +155,9 @@ export default function Settings() {
             ))}
           </ul>
         </Card>
+
+        {user && <AccountCard user={user} />}
+        {user?.role === 'Store Owner' && <TeamCard user={user} />}
       </div>
     </>
   )

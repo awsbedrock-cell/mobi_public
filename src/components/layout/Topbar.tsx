@@ -1,7 +1,8 @@
 import { initials } from '../../lib/utils'
-import { Bell, Check, Menu, ShieldCheck, PackageX, Search, Settings, ShoppingBag, TriangleAlert, User } from 'lucide-react'
+import { Bell, Check, LogOut, Menu, ShieldCheck, PackageX, Search, Settings, ShoppingBag, TriangleAlert, User } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../auth/AuthProvider'
 import { useBrand } from '../../branding/BrandProvider'
 import { roles } from '../../branding/types'
 import { stockStatus, useStore } from '../../context/StoreContext'
@@ -12,13 +13,15 @@ import { BrandSwitcher, StoreSwitcher } from './BrandSwitcher'
 import { Logo } from './Logo'
 import { ThemeSwitcher } from './ThemeSwitcher'
 
-const user = { name: 'Nishu Singh' }
+const demoUser = { name: 'Nishu Singh' }
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
   const navigate = useNavigate()
   const notify = useToast()
   const { products, syncLogs } = useStore()
   const { role, setRole } = useBrand()
+  const { user: account, signOut } = useAuth()
+  const user = account ?? demoUser
   const [query, setQuery] = useState('')
   const [read, setRead] = useState(false)
 
@@ -106,6 +109,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
               <div className="px-3 py-2">
                 <p className="text-sm font-bold">{user.name}</p>
                 <p className="text-xs text-text-muted">{role}</p>
+                {account && <p className="truncate text-xs text-text-subtle">{account.email}</p>}
               </div>
               <DropdownItem
                 icon={<User className="h-4 w-4" />}
@@ -125,21 +129,31 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
               >
                 Settings
               </DropdownItem>
-              <p className="mt-1 border-t border-border px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Role (demo)</p>
-              {roles.map((item) => (
-                <DropdownItem
-                  key={item}
-                  active={item === role}
-                  icon={item === role ? <Check className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4 text-text-subtle" />}
-                  onClick={() => {
-                    setRole(item)
-                    notify(`Now signed in as ${item}`, 'info')
-                    close()
-                  }}
-                >
-                  {item}
-                </DropdownItem>
-              ))}
+              {account ? (
+                <div className="mt-1 border-t border-border pt-1">
+                  <DropdownItem icon={<LogOut className="h-4 w-4" />} onClick={signOut}>
+                    Sign out
+                  </DropdownItem>
+                </div>
+              ) : (
+                <>
+                  <p className="mt-1 border-t border-border px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-subtle">Role (demo)</p>
+                  {roles.map((item) => (
+                    <DropdownItem
+                      key={item}
+                      active={item === role}
+                      icon={item === role ? <Check className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4 text-text-subtle" />}
+                      onClick={() => {
+                        setRole(item)
+                        notify(`Now signed in as ${item}`, 'info')
+                        close()
+                      }}
+                    >
+                      {item}
+                    </DropdownItem>
+                  ))}
+                </>
+              )}
             </>
           )}
         </Dropdown>

@@ -142,8 +142,16 @@ Data comes from official seller APIs only; nothing is scraped. Until a marketpla
 | Flipkart | Marketplace Seller API: verifies the application and imports shipments/orders |
 | Myntra, Nykaa, Meesho, Blinkit | Partner-only APIs; no connector until the marketplace grants access |
 
-Credentials are entered under E-commerce → Platform Settings → API, checked against the marketplace, encrypted (AES-256-GCM, `CREDENTIALS_KEY`) and never sent back to the browser. Connecting, disconnecting and syncing require the `ADMIN_KEY`.
+Credentials are entered under E-commerce → Platform Settings → API, checked against the marketplace, encrypted (AES-256-GCM, `CREDENTIALS_KEY`) and never sent back to the browser. Connecting, disconnecting and syncing are limited to the Store Owner.
 
-Not built yet: catalogue import, pushing listings, price and stock to marketplaces, user login. The admin key is the only access control, and the data endpoints are open to anyone who knows the API address.
+### Sign-in (live mode)
+
+- Every API route except `/api/health` and `/api/auth/*` needs a signed-in account. Demo mode has no login.
+- The first visit shows "Create the owner account"; it needs the server's `ADMIN_KEY` once. After that the Store Owner adds Manager and Cashier accounts under Settings → Team.
+- Passwords are stored as salted scrypt hashes. Sessions are signed tokens valid for 7 days, kept in the browser's local storage; removing an account ends its sessions.
+- Only the Store Owner can manage brands, marketplaces and accounts. Managers and Cashiers can read and edit shop data.
+- Lost owner password: there is no reset flow yet. Delete the row from the `users` table and run setup again.
+
+Not built yet: catalogue import, pushing listings, price and stock to marketplaces, password reset, per-store permissions.
 
 Tests: `cd server && npm test` (marketplace calls are mocked).

@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import express, { type NextFunction, type Request, type Response } from 'express'
+import { accountProblem, checkPassword, createLimiter, createSessions, hashPassword, normaliseEmail, users, type Role, type Sessions, type User } from './auth.ts'
 import type { Vault } from './crypto.ts'
 import type { Database, Queryable } from './db.ts'
 import { getMarketplace, marketplaces } from './marketplaces/index.ts'
@@ -12,8 +13,9 @@ type Item = { id: string } & Record<string, unknown>
 export interface AppOptions {
   db: Database
   vault: Vault
-  /** Required in the x-admin-key header to connect, disconnect or sync a marketplace. */
+  /** Required in the x-admin-key header to create the first Store Owner account. */
   adminKey?: string
+  sessions?: Sessions
   corsOrigins?: string[]
   fetcher?: Fetch
   /** How far back the first order import looks. */
@@ -51,8 +53,10 @@ async function upsert(db: Queryable, scope: string, kind: Kind, items: Item[], r
   }
 }
 
-export function createApp({ db, vault, adminKey, corsOrigins = [], fetcher = fetch, syncDays = 30 }: AppOptions) {
+export function createApp({ db, vault, adminKey, sessions = createSessions(), corsOrigins = [], fetcher = fetch, syncDays = 30 }: AppOptions) {
   const app = express()
+  app.set('trust proxy', 1)
+  const limiter = createLimiter()
   app.disable('x-powered-by')
 
   app.use((req, res, next) => {
@@ -61,7 +65,7 @@ export function createApp({ db, vault, adminKey, corsOrigins = [], fetcher = fet
       res.setHeader('access-control-allow-origin', origin)
       res.setHeader('vary', 'Origin')
       res.setHeader('access-control-allow-methods', 'GET,POST,PUT,DELETE,OPTIONS')
-      res.setHeader('access-control-allow-headers', 'content-type,x-admin-key')
+      res.setHeader('access-control-allow-headers', 'content-type,authorization,x-admin-key')
     }
     if (req.method === 'OPTIONS') return void res.sendStatus(204)
     next()
@@ -74,11 +78,14 @@ export function createApp({ db, vault, adminKey, corsOrigins = [], fetcher = fet
     return scope
   }
 
-  const requireAdmin = (req: Request) => {
-    if (!adminKey) throw new HttpError(503, 'Marketplace connections are disabled: ADMIN_KEY is not set on the server')
+  const userOf = (res: Response) => res.locals.user as User
+  const requireRole = (res: Response, ...allowed: Role[]) => {
+    if (!allowed.includes(userOf(res).role)) throw new HttpError(403, `Only a ${allowed.join(' or ')} can do this`)
+  }
+  /** Marketplace connections are managed by the Store Owner and need the credential vault. */
+  const requireAdmin = (_req: Request, res: Response) => {
     if (!vault.ready) throw new HttpError(503, 'Marketplace connections are disabled: CREDENTIALS_KEY is not set on the server')
-    const given = req.headers['x-admin-key']
-    if (typeof given !== 'string' || !sameSecret(given, adminKey)) throw new HttpError(401, 'Wrong admin key')
+    requireRole(res, 'Store Owner')
   }
 
   const marketplaceOf = (req: Request): Marketplace => {
@@ -125,7 +132,94 @@ export function createApp({ db, vault, adminKey, corsOrigins = [], fetcher = fet
 
   app.get('/api/health', async (_req, res) => {
     await db.query('select 1')
-    res.json({ ok: true, marketplaceConnections: Boolean(adminKey && vault.ready) })
+    res.json({ ok: true, marketplaceConnections: vault.ready })
+  })
+
+  app.get('/api/auth/status', async (_req, res) => {
+    res.json({ setupRequired: (await users.count(db)) === 0, setupAvailable: Boolean(adminKey) })
+  })
+
+  /** Creates the first Store Owner. Only works while there are no accounts, and needs the server's ADMIN_KEY. */
+  app.post('/api/auth/setup', async (req, res) => {
+    if (!adminKey) throw new HttpError(503, 'ADMIN_KEY is not set on the server')
+    const given = req.headers['x-admin-key']
+    const key = `setup|${req.ip}`
+    if (limiter.blocked(key)) throw new HttpError(429, 'Too many attempts. Try again in 15 minutes.')
+    if (typeof given !== 'string' || !sameSecret(given, adminKey)) {
+      limiter.fail(key)
+      throw new HttpError(401, 'Wrong admin key')
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const input = { email: normaliseEmail(body.email), name: body.name, password: body.password, role: 'Store Owner' as Role }
+    const problem = accountProblem(input)
+    if (problem) throw new HttpError(400, problem)
+    const user = await db.tx(async (tx) => {
+      if ((await users.count(tx)) > 0) throw new HttpError(409, 'An owner account already exists. Sign in instead.')
+      return users.create(tx, input as { email: string; name: string; role: Role; password: string })
+    })
+    res.json({ token: sessions.issue(user.id), user })
+  })
+
+  app.post('/api/auth/login', async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const email = normaliseEmail(body.email)
+    const key = `${email}|${req.ip}`
+    if (limiter.blocked(key)) throw new HttpError(429, 'Too many wrong passwords. Try again in 15 minutes.')
+    const row = email ? await users.withPassword(db, email) : null
+    if (!row || typeof body.password !== 'string' || !(await checkPassword(body.password, row.password))) {
+      limiter.fail(key)
+      throw new HttpError(401, 'Wrong email or password')
+    }
+    limiter.clear(key)
+    const { password: _password, ...user } = row
+    res.json({ token: sessions.issue(user.id), user })
+  })
+
+  // Everything below needs a signed-in account.
+  app.use('/api', async (req, res, next) => {
+    const header = req.headers.authorization ?? ''
+    const id = header.startsWith('Bearer ') ? sessions.userId(header.slice(7)) : null
+    const user = id ? await users.byId(db, id) : null
+    if (!user) throw new HttpError(401, 'Sign in to continue')
+    res.locals.user = user
+    next()
+  })
+
+  app.get('/api/auth/me', (_req, res) => {
+    res.json({ user: userOf(res) })
+  })
+
+  app.post('/api/auth/password', async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const row = await users.withPassword(db, userOf(res).email)
+    if (!row || typeof body.current !== 'string' || !(await checkPassword(body.current, row.password))) throw new HttpError(400, 'Current password is wrong')
+    const problem = accountProblem({ email: row.email, name: row.name, role: row.role, password: body.password })
+    if (problem) throw new HttpError(400, problem)
+    await db.query('update users set password = $2 where id = $1', [row.id, await hashPassword(body.password as string)])
+    res.json({ ok: true })
+  })
+
+  app.get('/api/users', async (_req, res) => {
+    requireRole(res, 'Store Owner')
+    res.json({ users: await users.list(db) })
+  })
+
+  app.post('/api/users', async (req, res) => {
+    requireRole(res, 'Store Owner')
+    const body = (req.body ?? {}) as Record<string, unknown>
+    const input = { email: normaliseEmail(body.email), name: body.name, password: body.password, role: body.role }
+    const problem = accountProblem(input)
+    if (problem) throw new HttpError(400, problem)
+    if (await users.withPassword(db, input.email)) throw new HttpError(409, 'An account with this email already exists')
+    await users.create(db, input as { email: string; name: string; role: Role; password: string })
+    res.json({ users: await users.list(db) })
+  })
+
+  app.delete('/api/users/:id', async (req, res) => {
+    requireRole(res, 'Store Owner')
+    if (req.params.id === userOf(res).id) throw new HttpError(409, 'You cannot delete your own account')
+    await db.query('delete from users where id = $1', [String(req.params.id)])
+    res.json({ users: await users.list(db) })
   })
 
   app.get('/api/marketplaces', (_req, res) => {
@@ -138,6 +232,7 @@ export function createApp({ db, vault, adminKey, corsOrigins = [], fetcher = fet
   })
 
   app.put('/api/brands', async (req, res) => {
+    requireRole(res, 'Store Owner')
     const body = req.body as { brands?: unknown }
     if (!Array.isArray(body?.brands) || body.brands.length === 0 || !body.brands.every(isItem)) throw new HttpError(400, 'brands must be a non-empty list')
     await db.query("insert into settings (key, data) values ('brands', $1) on conflict (key) do update set data = excluded.data", [JSON.stringify({ brands: body.brands })])
@@ -183,7 +278,7 @@ export function createApp({ db, vault, adminKey, corsOrigins = [], fetcher = fet
   })
 
   app.post('/api/scopes/:scope/platforms/:platform/connect', async (req, res) => {
-    requireAdmin(req)
+    requireAdmin(req, res)
     const scope = scopeOf(req)
     const marketplace = marketplaceOf(req)
     if (!marketplace.available || !marketplace.verify) throw new HttpError(409, marketplace.note)
@@ -204,7 +299,7 @@ export function createApp({ db, vault, adminKey, corsOrigins = [], fetcher = fet
   })
 
   app.post('/api/scopes/:scope/platforms/:platform/disconnect', async (req, res) => {
-    requireAdmin(req)
+    requireAdmin(req, res)
     const scope = scopeOf(req)
     await db.query('update connections set connected = false, credentials = null where scope = $1 and platform = $2', [scope, marketplaceOf(req).id])
     res.json(await scopeState(scope))
@@ -212,7 +307,7 @@ export function createApp({ db, vault, adminKey, corsOrigins = [], fetcher = fet
 
   /** Imports orders from the marketplace's seller API and records the result in the sync log. */
   app.post('/api/scopes/:scope/platforms/:platform/sync', async (req, res) => {
-    requireAdmin(req)
+    requireAdmin(req, res)
     const scope = scopeOf(req)
     const marketplace = marketplaceOf(req)
     const [row] = await db.query<{ credentials: string | null; connected: boolean; last_sync: Date | string | null }>('select credentials, connected, last_sync from connections where scope = $1 and platform = $2', [scope, marketplace.id])

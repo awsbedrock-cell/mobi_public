@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useAuth } from '../auth/AuthProvider'
 import { api, isLive } from '../lib/api'
 import { hexToRgb, onColor } from './color'
 import { defaultBrands } from './defaults'
@@ -120,6 +121,8 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   }, [state])
 
   // Live mode: brands are shared through the backend. The active brand, store and role stay per browser.
+  const account = useAuth().user
+  const role = account?.role ?? state.role
   const synced = useRef<Brand[] | null>(null)
   useEffect(() => {
     if (!isLive) return
@@ -140,11 +143,11 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!isLive || synced.current === null || synced.current === state.brands) return
+    if (!isLive || synced.current === null || synced.current === state.brands || !brandManagers.includes(role)) return
     synced.current = state.brands
     const timer = window.setTimeout(() => void api('/api/brands', { method: 'PUT', body: { brands: state.brands } }).catch(() => undefined), 400)
     return () => window.clearTimeout(timer)
-  }, [state.brands])
+  }, [state.brands, role])
 
   useEffect(() => {
     loadFont(style.font)
@@ -196,8 +199,8 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       store,
       style,
       previewing: preview !== null,
-      role: state.role,
-      canManage: brandManagers.includes(state.role),
+      role,
+      canManage: brandManagers.includes(role),
       scope: `${brand.id}:${store.id}`,
       switchBrand,
       switchStore,
@@ -207,7 +210,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       setRole,
       setPreview,
     }),
-    [state, brand, store, style, preview, switchBrand, switchStore, saveBrand, deleteBrand, updateStore, setRole],
+    [state, brand, store, style, preview, switchBrand, switchStore, saveBrand, deleteBrand, updateStore, setRole, role],
   )
 
   return <BrandContext.Provider value={value}>{children}</BrandContext.Provider>

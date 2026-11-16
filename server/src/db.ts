@@ -15,6 +15,14 @@ create table if not exists records (
   scope text not null, kind text not null, id text not null, rank double precision not null, data jsonb not null,
   primary key (scope, kind, id));
 create table if not exists settings (key text primary key, data jsonb not null);
+create table if not exists users (
+  id text primary key,
+  email text not null unique,
+  name text not null,
+  role text not null,
+  password text not null,
+  created_at timestamptz not null default now()
+);
 create table if not exists connections (
   scope text not null, platform text not null, credentials text, seller_id text,
   connected boolean not null default false, last_sync timestamptz, last_error text,

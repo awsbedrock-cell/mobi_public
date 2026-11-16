@@ -233,12 +233,12 @@ function ScopedStore({ scope, seed, cache, remotePath, children }: { scope: stri
   const platformAction = useCallback(
     async (id: PlatformId, action: 'connect' | 'disconnect' | 'sync', body: unknown = {}) => {
       try {
-        applyRemote(await api<RemoteState>(`${remotePath}/platforms/${id}/${action}`, { body, admin: true }))
+        applyRemote(await api<RemoteState>(`${remotePath}/platforms/${id}/${action}`, { body }))
         return null
       } catch (error) {
         const failure = error as ApiError
         if (failure.status === 502 && (failure.body as RemoteState | null)?.platforms) applyRemote(failure.body as RemoteState)
-        return failure.status === 401 ? 'Wrong or missing admin key. Enter it under API Settings.' : failure.message
+        return failure.message
       }
     },
     [remotePath, applyRemote],

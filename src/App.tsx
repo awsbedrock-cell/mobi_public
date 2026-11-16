@@ -1,3 +1,4 @@
+import { AuthProvider } from './auth/AuthProvider'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/layout/AppLayout'
 import { ToastProvider } from './components/ui/Toast'
@@ -29,6 +30,7 @@ import { ThemeProvider } from './theme/ThemeProvider'
 export default function App() {
   return (
     <ThemeProvider>
+      <AuthProvider>
       <BrandProvider>
         <ToastProvider>
       <StoreProvider>
@@ -67,6 +69,7 @@ export default function App() {
       </StoreProvider>
         </ToastProvider>
       </BrandProvider>
+      </AuthProvider>
     </ThemeProvider>
   )
 }

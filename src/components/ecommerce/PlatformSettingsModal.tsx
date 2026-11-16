@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { useStore } from '../../context/StoreContext'
 import { categories } from '../../data/mock'
 import type { PlatformId } from '../../data/types'
-import { adminKey } from '../../lib/api'
 import { cn } from '../../lib/utils'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
@@ -53,7 +52,6 @@ export function PlatformSettingsModal({ platformId, onClose, initialSection = 'g
   const [showKey, setShowKey] = useState(false)
   const [apiError, setApiError] = useState('')
   const [credentials, setCredentials] = useState<Record<string, string>>({})
-  const [admin, setAdmin] = useState(adminKey.get)
   const [busy, setBusy] = useState(false)
   if (!platform) return null
 
@@ -148,7 +146,6 @@ export function PlatformSettingsModal({ platformId, onClose, initialSection = 'g
               className="space-y-4"
               onSubmit={async (event) => {
                 event.preventDefault()
-                adminKey.set(admin.trim())
                 setBusy(true)
                 const error = await connectPlatform(platform.id, credentials)
                 setBusy(false)
@@ -180,11 +177,8 @@ export function PlatformSettingsModal({ platformId, onClose, initialSection = 'g
                   />
                 </FormField>
               ))}
-              <FormField label="Mobi admin key">
-                <input className="field" type="password" value={admin} onChange={(event) => setAdmin(event.target.value)} placeholder="Set as ADMIN_KEY on the Mobi server" autoComplete="off" required />
-              </FormField>
               {apiError && <p className="text-sm font-medium text-error">{apiError}</p>}
-              <p className="text-xs text-text-muted">Mobi checks these with {platform.name} before saving. They are stored encrypted on the Mobi server and are never shown again.</p>
+              <p className="text-xs text-text-muted">Mobi checks these with {platform.name} before saving. They are stored encrypted on the Mobi server and are never shown again. Only a Store Owner can connect a marketplace.</p>
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={busy}>
                   {busy ? 'Checking…' : platform.connected ? 'Replace credentials' : `Connect ${platform.name}`}
@@ -194,8 +188,7 @@ export function PlatformSettingsModal({ platformId, onClose, initialSection = 'g
                     type="button"
                     variant="outline"
                     onClick={() => {
-                      adminKey.set(admin.trim())
-                      togglePlatform(platform.id)
+                            togglePlatform(platform.id)
                     }}
                   >
                     Disconnect

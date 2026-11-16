@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
 import { createApp } from '../src/app.ts'
+import { createSessions } from '../src/auth.ts'
 import { createVault } from '../src/crypto.ts'
 import { openDatabase, type Database } from '../src/db.ts'
 
@@ -13,6 +14,8 @@ const ADMIN = 'admin-secret'
 let db: Database
 let server: Server
 let base = ''
+/** Session of the Store Owner; sent with every request unless a test overrides it. */
+let token = ''
 /** Stand-in for the marketplace servers: tests never call Amazon or Flipkart. */
 let remote: (url: string, init?: RequestInit) => Response = () => new Response('{}', { status: 500 })
 const calls: string[] = []
@@ -23,7 +26,7 @@ async function start() {
     calls.push(String(input))
     return remote(String(input), init)
   }) as typeof fetch
-  server = createApp({ db, vault: createVault('test-key'), adminKey: ADMIN, fetcher }).listen(0)
+  server = createApp({ db, vault: createVault('test-key'), adminKey: ADMIN, fetcher, sessions: createSessions('test-sessions') }).listen(0)
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
 }
 const stop = async () => {
@@ -32,11 +35,13 @@ const stop = async () => {
 }
 
 async function api(path: string, method = 'GET', body?: unknown, headers: Record<string, string> = {}) {
-  const response = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) })
+  const response = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}), ...headers }, body: body === undefined ? undefined : JSON.stringify(body) })
   return { status: response.status, body: (await response.json()) as Record<string, any> }
 }
 const headersOf = (init?: RequestInit) => (init?.headers ?? {}) as Record<string, string>
-const admin = { 'x-admin-key': ADMIN }
+const admin = {}
+const as = (session: string) => ({ authorization: `Bearer ${session}` })
+const owner = { name: 'Nishant', email: 'owner@mobi.test', password: 'owner-pass-1' }
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
 const seed = {
   products: [{ id: 'P1', name: 'Phone', stock: 5 }, { id: 'P2', name: 'Case', stock: 9 }],
@@ -51,6 +56,52 @@ after(stop)
 
 test('health', async () => {
   assert.deepEqual((await api('/api/health')).body, { ok: true, marketplaceConnections: true })
+})
+
+test('nothing is readable or writable without signing in', async () => {
+  const anonymous = { authorization: '' }
+  assert.deepEqual((await api('/api/auth/status', 'GET', undefined, anonymous)).body, { setupRequired: true, setupAvailable: true })
+  for (const path of ['/api/scopes/mobi:main', '/api/brands', '/api/marketplaces', '/api/users', '/api/auth/me']) assert.equal((await api(path, 'GET', undefined, anonymous)).status, 401, path)
+  assert.equal((await api('/api/scopes/mobi:main/init', 'POST', seed, anonymous)).status, 401)
+  assert.equal((await api('/api/scopes/mobi:main', 'GET', undefined, as('forged.token'))).status, 401)
+  assert.equal((await api('/api/scopes/mobi:main', 'GET', undefined, as(createSessions('other-secret').issue('someone')))).status, 401)
+})
+
+test('the first owner needs the admin key; setup works once', async () => {
+  assert.equal((await api('/api/auth/setup', 'POST', owner)).status, 401)
+  assert.equal((await api('/api/auth/setup', 'POST', owner, { 'x-admin-key': 'wrong' })).status, 401)
+  assert.equal((await api('/api/auth/setup', 'POST', { ...owner, password: 'short' }, { 'x-admin-key': ADMIN })).status, 400)
+  const created = await api('/api/auth/setup', 'POST', owner, { 'x-admin-key': ADMIN })
+  assert.equal(created.status, 200)
+  assert.deepEqual([created.body.user.role, created.body.user.email, created.body.user.password], ['Store Owner', 'owner@mobi.test', undefined])
+  assert.equal((await api('/api/auth/setup', 'POST', { ...owner, email: 'second@mobi.test' }, { 'x-admin-key': ADMIN })).status, 409)
+  assert.equal((await api('/api/auth/status')).body.setupRequired, false)
+  token = created.body.token
+  assert.equal((await api('/api/auth/me')).body.user.name, 'Nishant')
+})
+
+test('login, wrong passwords, accounts and password change', async () => {
+  assert.equal((await api('/api/auth/login', 'POST', { email: 'OWNER@mobi.test ', password: owner.password })).status, 200)
+  assert.equal((await api('/api/auth/login', 'POST', { email: owner.email, password: 'nope' })).status, 401)
+  assert.equal((await api('/api/auth/login', 'POST', { email: 'nobody@mobi.test', password: owner.password })).status, 401)
+  const [{ password }] = await db.query<{ password: string }>('select password from users')
+  assert.ok(!password.includes(owner.password))
+
+  const added = await api('/api/users', 'POST', { name: 'Meera', email: 'meera@mobi.test', password: 'manager-pass', role: 'Manager' })
+  assert.deepEqual(added.body.users.map((item: any) => item.role), ['Store Owner', 'Manager'])
+  assert.equal((await api('/api/users', 'POST', { name: 'Meera', email: 'meera@mobi.test', password: 'manager-pass', role: 'Manager' })).status, 409)
+  assert.equal((await api('/api/users', 'POST', { name: 'X', email: 'x@mobi.test', password: 'manager-pass', role: 'Admin' })).status, 400)
+  const meera = (await api('/api/auth/login', 'POST', { email: 'meera@mobi.test', password: 'manager-pass' })).body
+  assert.equal((await api('/api/auth/password', 'POST', { current: 'wrong', password: 'new-password-1' }, as(meera.token))).status, 400)
+  assert.equal((await api('/api/auth/password', 'POST', { current: 'manager-pass', password: 'new-password-1' }, as(meera.token))).status, 200)
+  assert.equal((await api('/api/auth/login', 'POST', { email: 'meera@mobi.test', password: 'manager-pass' })).status, 401)
+
+  assert.equal((await api(`/api/users/${(await api('/api/auth/me')).body.user.id}`, 'DELETE')).status, 409)
+  assert.equal((await api(`/api/users/${meera.user.id}`, 'DELETE')).body.users.length, 1)
+  assert.equal((await api('/api/auth/me', 'GET', undefined, as(meera.token))).status, 401)
+
+  for (let attempt = 0; attempt < 8; attempt++) await api('/api/auth/login', 'POST', { email: 'locked@mobi.test', password: 'guess' })
+  assert.equal((await api('/api/auth/login', 'POST', { email: 'locked@mobi.test', password: 'guess' })).status, 429)
 })
 
 test('a new store is empty until initialised, and init never overwrites', async () => {
@@ -91,9 +142,14 @@ test('brands are saved', async () => {
   assert.deepEqual((await api('/api/brands')).body, { brands: [{ id: 'mobi', name: 'Mobi' }] })
 })
 
-test('marketplace actions need the admin key', async () => {
-  assert.equal((await api('/api/scopes/mobi:main/platforms/amazon/connect', 'POST', { credentials: {} })).status, 401)
-  assert.equal((await api('/api/scopes/mobi:main/platforms/amazon/sync', 'POST', {}, { 'x-admin-key': 'wrong' })).status, 401)
+test('marketplace actions and brand changes are for the Store Owner only', async () => {
+  await api('/api/users', 'POST', { name: 'Cash', email: 'cashier@mobi.test', password: 'cashier-pass', role: 'Cashier' })
+  const cashier = (await api('/api/auth/login', 'POST', { email: 'cashier@mobi.test', password: 'cashier-pass' })).body.token
+  assert.equal((await api('/api/scopes/mobi:main/platforms/amazon/connect', 'POST', { credentials: {} }, as(cashier))).status, 403)
+  assert.equal((await api('/api/scopes/mobi:main/platforms/amazon/sync', 'POST', {}, as(cashier))).status, 403)
+  assert.equal((await api('/api/brands', 'PUT', { brands: [{ id: 'x' }] }, as(cashier))).status, 403)
+  assert.equal((await api('/api/users', 'GET', undefined, as(cashier))).status, 403)
+  assert.equal((await api('/api/scopes/mobi:main', 'GET', undefined, as(cashier))).status, 200)
 })
 
 test('platforms without a seller API cannot be connected', async () => {
