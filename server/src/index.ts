@@ -5,7 +5,7 @@ import { openDatabase } from './db.ts'
 const db = await openDatabase()
 const vault = createVault()
 const adminKey = process.env.ADMIN_KEY || undefined
-const corsOrigins = (process.env.CORS_ORIGINS ?? '').split(',').map((item) => item.trim()).filter(Boolean)
+const corsOrigins = (process.env.CORS_ORIGINS ?? '').split(',').map((item) => item.trim().replace(/\/+$/, '')).filter(Boolean)
 const port = Number(process.env.PORT) || 4000
 
 createApp({ db, vault, adminKey, corsOrigins }).listen(port, () => {
